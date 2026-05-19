@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/data:/app/data
+      - ${DOWNLOAD_DIR:-./media/downloads}:/media/downloads
+      - ${LIBRARY_DIR:-./media/library}:/media/library
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/asmr_manager.db
+      - DOWNLOAD_DIR=/media/downloads
+      - LIBRARY_DIR=/media/library
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

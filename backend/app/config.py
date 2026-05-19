@@ -1,0 +1,103 @@
+import os
+from pathlib import Path
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = BASE_DIR.parent / ".env"
+
+
+class Settings(BaseSettings):
+    # App
+    app_env: str = "development"
+    debug: bool = True
+
+    # Database
+    database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'asmr_manager.db'}"
+
+    # Directories
+    download_dir: str = "/media/downloads"
+    library_dir: str = "/media/library"
+
+    # Scan
+    scan_recursive: bool = True
+    watch_enabled: bool = True
+    stable_seconds: int = 10
+    check_interval: int = 5
+
+    # Server
+    host: str = "0.0.0.0"
+    port: int = 8080
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8080",
+    ]
+
+    # AI
+    ai_enabled: bool = False
+    ai_api_url: str = ""
+    ai_api_key: str = ""
+    ai_model: str = ""
+    ocr_enabled: bool = False
+
+    # Supported formats
+    supported_audio_formats: list[str] = ["mp3", "flac", "wav", "m4a", "opus", "ogg"]
+    supported_video_formats: list[str] = ["mp4", "mkv", "avi", "mov", "webm"]
+
+    # Rename
+    audio_rename_pattern: str = "[{cv}] {title} ({rj_id})"
+    video_rename_pattern: str = "[{creator}] {title}"
+    max_filename_length: int = 200
+
+    # Cover
+    cover_filenames: list[str] = ["cover.jpg", "folder.jpg", "front.jpg"]
+    cover_max_size: int = 1000
+
+    # Organize
+    unclassified_dir: str = "未分类"
+
+    # Logging
+    log_level: str = "INFO"
+
+    model_config = {"env_file": str(ENV_FILE), "env_file_encoding": "utf-8"}
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+def reload_settings() -> Settings:
+    """清除缓存并重新加载设置"""
+    get_settings.cache_clear()
+    return get_settings()
+
+
+def save_settings_to_env(updates: dict) -> None:
+    """将设置变更写入 .env 文件"""
+    # 读取现有 .env 内容
+    existing: dict[str, str] = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                existing[key.strip()] = value.strip()
+
+    # 更新值
+    for key, value in updates.items():
+        env_key = key.upper()
+        if isinstance(value, bool):
+            existing[env_key] = "true" if value else "false"
+        elif isinstance(value, list):
+            import json
+            existing[env_key] = json.dumps(value)
+        else:
+            existing[env_key] = str(value)
+
+    # 写回 .env
+    lines = [f"{k}={v}" for k, v in sorted(existing.items())]
+    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")

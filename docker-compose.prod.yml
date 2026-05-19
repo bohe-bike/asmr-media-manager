@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  asmr-manager:
+    image: sbkdockerhub/asmr-media-manager:latest
+    container_name: asmr-media-manager
+    ports:
+      - "${APP_PORT:-3000}:80"
+    volumes:
+      - ./data:/app/backend/data
+      - ${DOWNLOAD_DIR:-./media/downloads}:/media/downloads
+      - ${LIBRARY_DIR:-./media/library}:/media/library
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///app/backend/data/asmr_manager.db
+      - DOWNLOAD_DIR=/media/downloads
+      - LIBRARY_DIR=/media/library
+      - AI_ENABLED=${AI_ENABLED:-false}
+      - AI_API_URL=${AI_API_URL:-}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - WATCH_ENABLED=${WATCH_ENABLED:-true}
+      - STABLE_SECONDS=${STABLE_SECONDS:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/api/v1/settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

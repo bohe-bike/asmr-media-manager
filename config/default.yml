@@ -1,0 +1,74 @@
+# ASMR 媒体整理中心配置
+
+# 目录设置
+directories:
+  download: /media/downloads
+  library: /media/library
+
+# 扫描设置
+scan:
+  recursive: true
+  watch_enabled: true
+  stable_seconds: 10
+  check_interval: 5
+
+# 支持的媒体格式
+formats:
+  audio:
+    - mp3
+    - flac
+    - wav
+    - m4a
+    - opus
+    - ogg
+  video:
+    - mp4
+    - mkv
+    - avi
+    - mov
+    - webm
+
+# 重命名设置
+rename:
+  audio_pattern: "[{cv}] {title} ({rj_id})"
+  video_pattern: "[{creator}] {title}"
+  max_filename_length: 200
+
+# AI 设置
+ai:
+  enabled: false
+  provider: ollama
+  model: qwen2:7b
+  ollama_url: http://localhost:11434
+  ocr_enabled: false
+
+# 整理输出设置
+organize:
+  unclassified_dir: "未分类"
+  copy_covers: true
+
+# 封面设置
+cover:
+  search_names:
+    - cover.jpg
+    - folder.jpg
+    - front.jpg
+  max_size: 1000
+
+# 数据库设置
+database:
+  url: sqlite:///data/asmr_manager.db
+  echo: false
+
+# 服务器设置
+server:
+  host: 0.0.0.0
+  port: 8080
+  cors_origins:
+    - http://localhost:5173
+    - http://localhost:3000
+    - http://localhost:8080
+
+# 日志设置
+logging:
+  level: INFO
