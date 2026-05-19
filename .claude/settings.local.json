@@ -6,7 +6,8 @@
       "Bash(pip show *)",
       "Bash(pip uninstall *)",
       "Bash(python -m alembic revision --autogenerate -m \"init\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(npm run *)"
     ]
   }
 }
