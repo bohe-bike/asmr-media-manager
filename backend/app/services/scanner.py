@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -97,6 +98,68 @@ class ScannerService:
 
         return job
 
+    async def create_scan_job(
+        self, path: str, scan_type: str = "full", recursive: bool = True
+    ) -> ScanJob:
+        """创建扫描任务并返回，实际扫描由后台任务执行。"""
+        job = ScanJob(
+            scan_path=path,
+            status="running",
+            scan_type=scan_type,
+            started_at=datetime.utcnow(),
+        )
+        self.db.add(job)
+        await self.db.commit()
+        await self.db.refresh(job)
+        return job
+
+    async def run_scan_job(self, job_id: int, recursive: bool = True) -> None:
+        """执行已创建的扫描任务，持续更新数据库进度供 WebSocket 轮询。"""
+        result = await self.db.execute(select(ScanJob).where(ScanJob.id == job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            logger.error(f"Scan job {job_id} not found")
+            return
+
+        errors = []
+        try:
+            files = self._collect_files(job.scan_path, recursive)
+            job.total_files = len(files)
+            await self.db.commit()
+
+            for file_path in files:
+                try:
+                    if job.scan_type == "incremental":
+                        existing = await self._find_existing(file_path)
+                        if existing:
+                            job.processed_files += 1
+                            await self.db.commit()
+                            continue
+
+                    media = await self._process_file(file_path, commit=False)
+                    if media:
+                        job.new_files += 1
+                    job.processed_files += 1
+                except Exception as e:
+                    logger.error(f"Error processing {file_path}: {e}")
+                    job.error_files += 1
+                    errors.append({"path": file_path, "error": str(e)})
+
+                await self.db.commit()
+
+            job.status = "completed"
+            job.finished_at = datetime.utcnow()
+            if errors:
+                job.errors = json.dumps(errors, ensure_ascii=False)
+            await self.db.commit()
+
+        except Exception as e:
+            logger.error(f"Scan job {job.id} failed: {e}")
+            job.status = "failed"
+            job.finished_at = datetime.utcnow()
+            job.errors = json.dumps([{"error": str(e)}], ensure_ascii=False)
+            await self.db.commit()
+
     def _collect_files(self, path: str, recursive: bool = True) -> list[str]:
         """收集目录中的媒体文件"""
         files = []
@@ -119,7 +182,7 @@ class ScannerService:
         )
         return result.scalar_one_or_none()
 
-    async def _process_file(self, file_path: str) -> Media | None:
+    async def _process_file(self, file_path: str, commit: bool = True) -> Media | None:
         """处理单个文件：哈希 → 元数据 → 规则解析 → 作者匹配 → 保存"""
         # Check if already exists
         existing = await self._find_existing(file_path)
@@ -172,7 +235,8 @@ class ScannerService:
                 media.cv = match_result["cv"]
 
         self.db.add(media)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return media
 
     async def process_and_organize(self, file_path: str) -> Media:

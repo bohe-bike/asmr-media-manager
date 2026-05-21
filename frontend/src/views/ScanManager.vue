@@ -201,7 +201,7 @@ async function handleScan() {
     if (result.status === 'running') {
       connectWs(result.id)
     }
-    ElMessage.success('扫描完成')
+    ElMessage.success('扫描任务已启动')
     refreshJobs()
   } finally {
     scanning.value = false

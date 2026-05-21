@@ -1,9 +1,9 @@
 import asyncio
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import async_session, get_db
 from app.models.scan_job import ScanJob
 from app.schemas.scan import ScanRequest, ScanJobResponse
 from app.schemas.common import ApiResponse, PaginatedResponse
@@ -13,17 +13,8 @@ from app.core.exceptions import NotFoundException, ValidationException
 router = APIRouter()
 
 
-@router.post("/scan")
-async def start_scan(request: ScanRequest, db: AsyncSession = Depends(get_db)):
-    """启动扫描任务"""
-    import os
-    if not os.path.isdir(request.path):
-        raise ValidationException(f"路径不存在或不是目录: {request.path}")
-
-    scanner = ScannerService(db)
-    job = await scanner.scan_directory(request.path, request.scan_type, request.recursive)
-
-    return ApiResponse(data=ScanJobResponse(
+def _job_response(job: ScanJob) -> ScanJobResponse:
+    return ScanJobResponse(
         id=job.id,
         scan_path=job.scan_path,
         status=job.status,
@@ -36,7 +27,31 @@ async def start_scan(request: ScanRequest, db: AsyncSession = Depends(get_db)):
         finished_at=job.finished_at,
         created_at=job.created_at,
         progress_percent=100.0 if job.total_files == 0 else (job.processed_files / job.total_files * 100),
-    ))
+    )
+
+
+async def _run_scan_background(job_id: int, recursive: bool) -> None:
+    async with async_session() as db:
+        scanner = ScannerService(db)
+        await scanner.run_scan_job(job_id, recursive)
+
+
+@router.post("/scan")
+async def start_scan(
+    request: ScanRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """启动扫描任务"""
+    import os
+    if not os.path.isdir(request.path):
+        raise ValidationException(f"路径不存在或不是目录: {request.path}")
+
+    scanner = ScannerService(db)
+    job = await scanner.create_scan_job(request.path, request.scan_type, request.recursive)
+    background_tasks.add_task(_run_scan_background, job.id, request.recursive)
+
+    return ApiResponse(data=_job_response(job))
 
 
 @router.get("/scan/jobs")
@@ -52,8 +67,9 @@ async def list_scan_jobs(
         query = query.where(ScanJob.status == status)
 
     # Count
-    count_result = await db.execute(select(ScanJob))
-    total = len(count_result.scalars().all())
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total = count_result.scalar()
 
     # Paginate
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -61,20 +77,7 @@ async def list_scan_jobs(
     jobs = result.scalars().all()
 
     items = [
-        ScanJobResponse(
-            id=j.id,
-            scan_path=j.scan_path,
-            status=j.status,
-            scan_type=j.scan_type,
-            total_files=j.total_files,
-            processed_files=j.processed_files,
-            new_files=j.new_files,
-            error_files=j.error_files,
-            started_at=j.started_at,
-            finished_at=j.finished_at,
-            created_at=j.created_at,
-            progress_percent=100.0 if j.total_files == 0 else (j.processed_files / j.total_files * 100),
-        )
+        _job_response(j)
         for j in jobs
     ]
 
@@ -89,17 +92,4 @@ async def get_scan_job(job_id: int, db: AsyncSession = Depends(get_db)):
     if not job:
         raise NotFoundException(f"扫描任务 {job_id} 不存在")
 
-    return ApiResponse(data=ScanJobResponse(
-        id=job.id,
-        scan_path=job.scan_path,
-        status=job.status,
-        scan_type=job.scan_type,
-        total_files=job.total_files,
-        processed_files=job.processed_files,
-        new_files=job.new_files,
-        error_files=job.error_files,
-        started_at=job.started_at,
-        finished_at=job.finished_at,
-        created_at=job.created_at,
-        progress_percent=100.0 if job.total_files == 0 else (job.processed_files / job.total_files * 100),
-    ))
+    return ApiResponse(data=_job_response(job))

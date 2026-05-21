@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+import os
+import xml.etree.ElementTree as ET
 
 from app.database import get_db
 from app.models.media import Media
 from app.schemas.common import ApiResponse
 from app.services.metadata_service import MetadataService
 from app.services.ai_service import AIService
+from app.services.cover_service import CoverService
 from app.core.exceptions import NotFoundException, ValidationException
 
 router = APIRouter()
@@ -40,11 +43,58 @@ async def generate_metadata(
         raise NotFoundException("未找到指定的媒体文件")
 
     generated = 0
+    failed = 0
+    cover_service = CoverService()
     for media in medias:
-        if request.generate_nfo and media.media_type == "video":
-            generated += 1
+        try:
+            changed = False
+            if request.generate_nfo:
+                media.nfo_path = _write_nfo(media)
+                changed = True
+            if request.generate_covers:
+                cover_path = await cover_service.find_local_cover(media.file_path)
+                if cover_path:
+                    media.cover_path = cover_path
+                    changed = True
+            if changed:
+                generated += 1
+        except Exception:
+            failed += 1
 
-    return ApiResponse(data={"generated": generated, "total": len(medias)})
+    await db.commit()
+    return ApiResponse(data={"generated": generated, "failed": failed, "total": len(medias)})
+
+
+def _write_nfo(media: Media) -> str:
+    """在媒体文件旁生成基础 NFO，供本地媒体库读取。"""
+    media_dir = os.path.dirname(media.file_path)
+    base_name = os.path.splitext(os.path.basename(media.file_path))[0]
+    nfo_path = os.path.join(media_dir, f"{base_name}.nfo")
+
+    root = ET.Element("movie" if media.media_type == "video" else "album")
+    fields = {
+        "title": media.title or os.path.splitext(media.file_name)[0],
+        "originaltitle": media.file_name,
+        "studio": media.circle,
+        "artist": media.creator or media.cv,
+        "genre": "ASMR",
+        "tag": media.rj_id,
+        "plot": media.error_message,
+    }
+    for key, value in fields.items():
+        if value:
+            child = ET.SubElement(root, key)
+            child.text = str(value)
+
+    if media.cv:
+        actor = ET.SubElement(root, "actor")
+        name = ET.SubElement(actor, "name")
+        name.text = media.cv
+
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ", level=0)
+    tree.write(nfo_path, encoding="utf-8", xml_declaration=True)
+    return nfo_path
 
 
 @router.post("/metadata/write-tags")
