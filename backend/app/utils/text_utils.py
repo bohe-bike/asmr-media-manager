@@ -1,6 +1,46 @@
 import re
 import unicodedata
 
+# 联系方式/社交账号的匹配模式（应被过滤）
+CONTACT_PATTERNS = re.compile(
+    r'(?:TG[@:]|TG群|微信[::]|WeChat[::]|QQ[:\s]|QQ群|'
+    r't\.me/|twitter\.com/|pixiv\.net/|bilibili\.com/|'
+    r'@[a-zA-Z0-9_]{3,}|'  # @username（至少3位）
+    r'https?://)',  # URL
+    re.IGNORECASE,
+)
+
+# 创作者字段的分隔符
+_ARTIST_SEPARATORS = re.compile(r'[;；、/&＆×✕]|(?:\s+feat\.?\s+)|(?:\s+ft\.?\s+)', re.IGNORECASE)
+
+
+def split_artist(raw: str) -> str:
+    """从原始创作者字段中提取主创作者。
+
+    规则：
+    1. 按常见分隔符拆分（;、/、&、feat. 等）
+    2. 过滤掉联系方式/社交账号（TG@、微信:、QQ:、URL 等）
+    3. 取第一个有效名字作为主创作者
+    """
+    if not raw or not raw.strip():
+        return raw
+
+    parts = _ARTIST_SEPARATORS.split(raw)
+    for part in parts:
+        name = part.strip()
+        if not name:
+            continue
+        # 跳过联系方式
+        if CONTACT_PATTERNS.search(name):
+            continue
+        # 跳过纯数字或过短的字符串
+        if len(name) < 2 or name.isdigit():
+            continue
+        return name
+
+    # 全部被过滤了，返回原始字符串（降级处理）
+    return raw.strip()
+
 
 def detect_language(text: str) -> str:
     """检测文本主要语言"""

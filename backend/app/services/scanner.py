@@ -14,6 +14,7 @@ from app.services.rule_engine import RuleEngine
 from app.services.metadata_service import MetadataService
 from app.services.author_matcher import AuthorMatcher
 from app.services.organize_service import OrganizeService
+from app.services.dlsite_service import DlsiteService
 from app.utils.hash import compute_file_hash
 from app.utils.file_utils import get_media_type, get_format, is_supported_format
 from app.config import get_settings
@@ -38,6 +39,7 @@ class ScannerService:
         self.rule_engine = RuleEngine()
         self.metadata_service = MetadataService()
         self.author_matcher = AuthorMatcher(db)
+        self.dlsite_service = DlsiteService()
         self.organize_service = OrganizeService(self.settings.library_dir)
         self._pending_files: dict[str, FileInfo] = {}
 
@@ -183,7 +185,10 @@ class ScannerService:
         return result.scalar_one_or_none()
 
     async def _process_file(self, file_path: str, commit: bool = True) -> Media | None:
-        """处理单个文件：哈希 → 元数据 → 规则解析 → 作者匹配 → 保存"""
+        """处理单个文件：哈希 → 元数据 → 正则解析 → DLsite 反查 → 作者匹配 → 保存
+
+        优先级：手动作者规则 > DLsite API > 文件名正则解析 > 文件内置元数据
+        """
         # Check if already exists
         existing = await self._find_existing(file_path)
         if existing:
@@ -196,11 +201,31 @@ class ScannerService:
         if not media_type:
             return None
 
-        # Read metadata
+        # ① 读取文件内置元数据（最低优先级 fallback）
         metadata = await self.metadata_service.read_metadata(file_path)
 
-        # Parse filename
-        parsed = await self.rule_engine.parse(file_path)
+        # ② 文件名正则解析（向上查找目录名中的 RJ号）
+        parsed = await self.rule_engine.parse_with_ancestors(file_path, max_depth=2)
+
+        # ③ DLsite API 反查（如果有 RJ/DL 号）
+        dlsite_data = None
+        work_id = parsed.get("rj_id") or parsed.get("dl_id")
+        if work_id and self.dlsite_service.enabled:
+            try:
+                dlsite_data = await self.dlsite_service.fetch_by_id(work_id)
+            except Exception as e:
+                logger.warning(f"DLsite API 查询失败 {work_id}: {e}")
+
+        # 合并元数据，优先级：dlsite > parsed > metadata
+        title = (dlsite_data or {}).get("title") or parsed.get("title") or metadata.get("title")
+        creator = (dlsite_data or {}).get("creator") or metadata.get("artist")
+        circle = (dlsite_data or {}).get("circle")
+        cv = parsed.get("cv") or (dlsite_data or {}).get("cv")
+        language = parsed.get("language") or (dlsite_data or {}).get("language")
+        platform = parsed.get("platform")
+        description = (dlsite_data or {}).get("description")
+        cover_url = (dlsite_data or {}).get("cover_url")
+        metadata_source = "dlsite" if dlsite_data else "parsed"
 
         media = Media(
             file_path=file_path,
@@ -215,24 +240,29 @@ class ScannerService:
             channels=metadata.get("channels"),
             width=metadata.get("width"),
             height=metadata.get("height"),
-            title=parsed.get("title") or metadata.get("title"),
+            title=title,
             rj_id=parsed.get("rj_id"),
             dl_id=parsed.get("dl_id"),
-            creator=metadata.get("artist"),
-            cv=parsed.get("cv"),
-            platform=parsed.get("platform"),
-            language=parsed.get("language"),
+            creator=creator,
+            circle=circle,
+            cv=cv,
+            platform=platform,
+            language=language,
+            description=description,
+            cover_url=cover_url,
+            metadata_source=metadata_source,
             status="processed",
             scanned_at=datetime.utcnow(),
         )
 
-        # Author matching
+        # ④ 作者匹配（手动规则，命中时覆盖所有已有值）
         match_result = await self.author_matcher.match(media)
         if match_result:
             media.creator = match_result["creator"]
             media.circle = match_result["circle"]
             if match_result["cv"]:
                 media.cv = match_result["cv"]
+            media.metadata_source = "manual"
 
         self.db.add(media)
         if commit:

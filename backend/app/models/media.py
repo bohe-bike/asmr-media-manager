@@ -31,7 +31,10 @@ class Media(Base):
     platform = Column(String(20))  # dlsite / patreon / youtube / other
     language = Column(String(10))  # ja / zh / en / other
     cover_path = Column(Text)
+    cover_url = Column(Text)
     nfo_path = Column(Text)
+    description = Column(Text)
+    metadata_source = Column(String(20))
     status = Column(String(20), nullable=False, default="pending", index=True)
     plex_ready = Column(Boolean, nullable=False, default=False)
     error_message = Column(Text)

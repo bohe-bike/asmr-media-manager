@@ -33,11 +33,13 @@ class MediaResponse(BaseModel):
     platform: str | None = None
     language: str | None = None
     cover_path: str | None = None
+    cover_url: str | None = None
+    description: str | None = None
+    metadata_source: str | None = None
     status: str
     plex_ready: bool
     error_message: str | None = None
     tags: list[TagInfo] = []
-    cover_url: str | None = None
     created_at: datetime
     updated_at: datetime
     scanned_at: datetime | None = None
@@ -61,6 +63,8 @@ class MediaListItem(BaseModel):
     status: str
     tags: list[TagInfo] = []
     cover_url: str | None = None
+    description: str | None = None
+    metadata_source: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

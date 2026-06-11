@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     ai_model: str = ""
     ocr_enabled: bool = False
 
+    # DLsite
+    dlsite_enabled: bool = True
+    dlsite_api_base: str = "https://www.dlsite.com/maniax/api"
+    dlsite_cache_ttl: int = 1800
+    dlsite_rate_limit: float = 1.0
+    dlsite_timeout: float = 10.0
+    dlsite_proxy: str = ""
+
     # Supported formats
     supported_audio_formats: list[str] = ["mp3", "flac", "wav", "m4a", "opus", "ogg"]
     supported_video_formats: list[str] = ["mp4", "mkv", "avi", "mov", "webm"]

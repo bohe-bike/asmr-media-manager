@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from app.utils.file_utils import get_media_type
+from app.utils.text_utils import split_artist
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +55,14 @@ class MetadataService:
                 # Try common tag formats
                 if isinstance(tags, ID3):
                     result["title"] = str(tags.get("TIT2", "")) or None
-                    result["artist"] = str(tags.get("TPE1", "")) or None
+                    raw_artist = str(tags.get("TPE1", "")) or None
+                    result["artist"] = split_artist(raw_artist) if raw_artist else None
                     result["album"] = str(tags.get("TALB", "")) or None
                     result["genre"] = str(tags.get("TCON", "")) or None
                 elif hasattr(tags, "get"):
                     result["title"] = str(tags.get("title", [""])[0]) or None
-                    result["artist"] = str(tags.get("artist", [""])[0]) or None
+                    raw_artist = str(tags.get("artist", [""])[0]) or None
+                    result["artist"] = split_artist(raw_artist) if raw_artist else None
                     result["album"] = str(tags.get("album", [""])[0]) or None
                     result["genre"] = str(tags.get("genre", [""])[0]) or None
 
