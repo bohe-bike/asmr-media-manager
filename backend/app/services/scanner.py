@@ -15,6 +15,7 @@ from app.services.metadata_service import MetadataService
 from app.services.author_matcher import AuthorMatcher
 from app.services.organize_service import OrganizeService
 from app.services.dlsite_service import DlsiteService
+from app.services.cover_service import CoverService
 from app.utils.hash import compute_file_hash
 from app.utils.file_utils import get_media_type, get_format, is_supported_format
 from app.config import get_settings
@@ -77,6 +78,10 @@ class ScannerService:
                     media = await self._process_file(file_path)
                     if media:
                         new_count += 1
+                        try:
+                            await self._post_process(media)
+                        except Exception as e:
+                            logger.warning(f"Post-process failed for {file_path}: {e}")
                     job.processed_files += 1
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {e}")
@@ -141,6 +146,10 @@ class ScannerService:
                     media = await self._process_file(file_path, commit=False)
                     if media:
                         job.new_files += 1
+                        try:
+                            await self._post_process(media)
+                        except Exception as e:
+                            logger.warning(f"Post-process failed for {file_path}: {e}")
                     job.processed_files += 1
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {e}")
@@ -270,7 +279,7 @@ class ScannerService:
         return media
 
     async def process_and_organize(self, file_path: str) -> Media:
-        """完整处理流程：扫描 → 解析 → 匹配 → 移动到整理目录"""
+        """完整处理流程：扫描 → 解析 → 匹配 → 移动到整理目录 → 写回标签/生成NFO"""
         media = await self._process_file(file_path)
         if not media:
             existing = await self._find_existing(file_path)
@@ -284,4 +293,50 @@ class ScannerService:
         media.file_name = os.path.basename(new_path)
         media.status = "processed"
         await self.db.commit()
+
+        # 后处理：写标签、下载封面、生成 NFO
+        await self._post_process(media)
         return media
+
+    async def _post_process(self, media: Media) -> None:
+        """后处理：写回音频标签、下载封面、生成 NFO 文件。
+
+        在文件最终路径确定后调用。
+        """
+        from app.api.metadata import _write_nfo
+
+        cover_service = CoverService()
+
+        # ① 下载远程封面（如果有 cover_url 且本地没有封面）
+        local_cover = await cover_service.find_local_cover(media.file_path)
+        if not local_cover and media.cover_url:
+            save_dir = os.path.dirname(media.file_path)
+            local_cover = await cover_service.download_cover(media.cover_url, save_dir)
+            if local_cover:
+                media.cover_path = local_cover
+
+        # ② 写回音频标签
+        if media.media_type == "audio":
+            tags = {}
+            if media.title:
+                tags["title"] = media.title
+            if media.creator:
+                tags["artist"] = media.creator
+            if media.circle:
+                tags["album_artist"] = media.circle
+            tags["genre"] = "ASMR"
+            if media.rj_id:
+                tags["comment"] = media.rj_id
+
+            if tags:
+                await self.metadata_service.write_audio_tags(
+                    media.file_path, tags, cover_path=local_cover
+                )
+
+        # ③ 生成 NFO 文件
+        try:
+            media.nfo_path = _write_nfo(media)
+        except Exception as e:
+            logger.warning(f"Failed to generate NFO for {media.file_path}: {e}")
+
+        await self.db.commit()

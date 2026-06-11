@@ -101,17 +101,33 @@ class MetadataService:
             logger.warning(f"Failed to read video metadata for {file_path}: {e}")
             return {}
 
-    async def write_audio_tags(self, file_path: str, tags: dict) -> bool:
-        """将标签写入音频文件"""
+    async def write_audio_tags(self, file_path: str, tags: dict, cover_path: str | None = None) -> bool:
+        """将标签写入音频文件，支持 MP3/FLAC/M4A/OPUS/OGG。
+
+        tags: title, artist, album_artist, genre, comment
+        cover_path: 封面图片路径（可选）
+        """
         try:
             from mutagen import File as MutagenFile
-            from mutagen.flac import FLAC
+            from mutagen.flac import FLAC, Picture
             from mutagen.mp3 import MP3
-            from mutagen.id3 import TIT2, TPE1, TPE2, TCON, COMM
+            from mutagen.mp4 import MP4, MP4Cover
+            from mutagen.id3 import TIT2, TPE1, TPE2, TCON, COMM, APIC
+            from mutagen.oggopus import OggOpus
+            from mutagen.oggvorbis import OggVorbis
 
             audio = MutagenFile(file_path)
             if audio is None:
                 return False
+
+            # 读取封面数据
+            cover_data = None
+            cover_mime = "image/jpeg"
+            if cover_path and os.path.isfile(cover_path):
+                with open(cover_path, "rb") as f:
+                    cover_data = f.read()
+                if cover_path.lower().endswith(".png"):
+                    cover_mime = "image/png"
 
             if isinstance(audio, MP3):
                 if audio.tags is None:
@@ -126,6 +142,11 @@ class MetadataService:
                     audio.tags["TCON"] = TCON(encoding=3, text=tags["genre"])
                 if "comment" in tags:
                     audio.tags["COMM"] = COMM(encoding=3, lang="eng", text=tags["comment"])
+                if cover_data:
+                    audio.tags.add(APIC(
+                        encoding=3, mime=cover_mime, type=3, desc="Cover", data=cover_data
+                    ))
+
             elif isinstance(audio, FLAC):
                 if "title" in tags:
                     audio["TITLE"] = tags["title"]
@@ -137,6 +158,49 @@ class MetadataService:
                     audio["GENRE"] = tags["genre"]
                 if "comment" in tags:
                     audio["COMMENT"] = tags["comment"]
+                if cover_data:
+                    pic = Picture()
+                    pic.type = 3  # Cover (front)
+                    pic.mime = cover_mime
+                    pic.desc = "Cover"
+                    pic.data = cover_data
+                    audio.clear_pictures()
+                    audio.add_picture(pic)
+
+            elif isinstance(audio, MP4):
+                if "title" in tags:
+                    audio["\xa9nam"] = [tags["title"]]
+                if "artist" in tags:
+                    audio["\xa9ART"] = [tags["artist"]]
+                if "album_artist" in tags:
+                    audio["aART"] = [tags["album_artist"]]
+                if "genre" in tags:
+                    audio["\xa9gen"] = [tags["genre"]]
+                if "comment" in tags:
+                    audio["\xa9cmt"] = [tags["comment"]]
+                if cover_data:
+                    fmt = MP4Cover.FORMAT_PNG if cover_mime == "image/png" else MP4Cover.FORMAT_JPEG
+                    audio["covr"] = [MP4Cover(cover_data, imageformat=fmt)]
+
+            elif isinstance(audio, (OggOpus, OggVorbis)):
+                if "title" in tags:
+                    audio["title"] = [tags["title"]]
+                if "artist" in tags:
+                    audio["artist"] = [tags["artist"]]
+                if "album_artist" in tags:
+                    audio["albumartist"] = [tags["album_artist"]]
+                if "genre" in tags:
+                    audio["genre"] = [tags["genre"]]
+                if "comment" in tags:
+                    audio["comment"] = [tags["comment"]]
+                if cover_data:
+                    pic = Picture()
+                    pic.type = 3
+                    pic.mime = cover_mime
+                    pic.desc = "Cover"
+                    pic.data = cover_data
+                    from base64 import b64encode
+                    audio["metadata_block_picture"] = [b64encode(pic.write()).decode("ascii")]
 
             audio.save()
             return True
