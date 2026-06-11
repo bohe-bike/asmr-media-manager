@@ -6,6 +6,7 @@ class ScanRequest(BaseModel):
     path: str
     scan_type: str = "full"
     recursive: bool = True
+    organize: bool = False  # 扫描后是否自动整理到 library 目录
 
 
 class ScanJobResponse(BaseModel):
@@ -17,6 +18,7 @@ class ScanJobResponse(BaseModel):
     processed_files: int = 0
     new_files: int = 0
     error_files: int = 0
+    organized_files: int = 0
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime

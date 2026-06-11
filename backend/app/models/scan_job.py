@@ -16,6 +16,7 @@ class ScanJob(Base):
     processed_files = Column(Integer, default=0)
     new_files = Column(Integer, default=0)
     error_files = Column(Integer, default=0)
+    organized_files = Column(Integer, default=0)
     errors = Column(Text)  # JSON string
     started_at = Column(DateTime)
     finished_at = Column(DateTime)

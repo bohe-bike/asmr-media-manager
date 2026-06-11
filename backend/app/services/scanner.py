@@ -16,6 +16,7 @@ from app.services.author_matcher import AuthorMatcher
 from app.services.organize_service import OrganizeService
 from app.services.dlsite_service import DlsiteService
 from app.services.cover_service import CoverService
+from app.services.plex_service import PlexService
 from app.utils.hash import compute_file_hash
 from app.utils.file_utils import get_media_type, get_format, is_supported_format
 from app.config import get_settings
@@ -120,8 +121,11 @@ class ScannerService:
         await self.db.refresh(job)
         return job
 
-    async def run_scan_job(self, job_id: int, recursive: bool = True) -> None:
-        """执行已创建的扫描任务，持续更新数据库进度供 WebSocket 轮询。"""
+    async def run_scan_job(self, job_id: int, recursive: bool = True, organize: bool = False) -> None:
+        """执行已创建的扫描任务，持续更新数据库进度供 WebSocket 轮询。
+
+        organize=True 时，扫描完成后自动将文件整理到 library 目录。
+        """
         result = await self.db.execute(select(ScanJob).where(ScanJob.id == job_id))
         job = result.scalar_one_or_none()
         if not job:
@@ -146,10 +150,23 @@ class ScannerService:
                     media = await self._process_file(file_path, commit=False)
                     if media:
                         job.new_files += 1
+
+                        # 整理到 library 目录
+                        if organize:
+                            try:
+                                new_path = self.organize_service.move_to_library(media)
+                                media.file_path = new_path
+                                media.file_name = os.path.basename(new_path)
+                                job.organized_files += 1
+                            except Exception as e:
+                                logger.warning(f"Organize failed for {file_path}: {e}")
+
+                        # 后处理：写标签、下载封面、生成 NFO
                         try:
                             await self._post_process(media)
                         except Exception as e:
                             logger.warning(f"Post-process failed for {file_path}: {e}")
+
                     job.processed_files += 1
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {e}")
@@ -163,6 +180,14 @@ class ScannerService:
             if errors:
                 job.errors = json.dumps(errors, ensure_ascii=False)
             await self.db.commit()
+
+            # 整理完成后通知 Plex 刷新媒体库
+            if organize and self.settings.plex_auto_refresh and job.organized_files > 0:
+                try:
+                    plex = PlexService()
+                    await plex.refresh_library()
+                except Exception as e:
+                    logger.warning(f"Plex refresh notification failed: {e}")
 
         except Exception as e:
             logger.error(f"Scan job {job.id} failed: {e}")
@@ -296,6 +321,15 @@ class ScannerService:
 
         # 后处理：写标签、下载封面、生成 NFO
         await self._post_process(media)
+
+        # 通知 Plex 刷新
+        if self.settings.plex_auto_refresh:
+            try:
+                plex = PlexService()
+                await plex.refresh_library()
+            except Exception as e:
+                logger.warning(f"Plex refresh notification failed: {e}")
+
         return media
 
     async def _post_process(self, media: Media) -> None:
@@ -320,6 +354,11 @@ class ScannerService:
             tags = {}
             if media.title:
                 tags["title"] = media.title
+                # album 用 [RJ号] 标题 格式，Plex 按 album 分组
+                album = media.title
+                if media.rj_id:
+                    album = f"[{media.rj_id}] {media.title}"
+                tags["album"] = album
             if media.creator:
                 tags["artist"] = media.creator
             if media.circle:

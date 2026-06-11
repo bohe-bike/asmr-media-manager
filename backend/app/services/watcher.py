@@ -46,18 +46,44 @@ class DownloadWatcher:
         self._check_task: asyncio.Task | None = None
 
     async def start(self, path: str | None = None):
-        watch_path = path or self.settings.download_dir
-        if not os.path.isdir(watch_path):
-            logger.warning(f"Watch directory does not exist: {watch_path}")
-            return
+        """启动目录监控。
 
+        path: 指定监控单个目录（可选）
+        未指定时监控 download_dir + watch_dirs 配置的所有目录。
+        """
         self._running = True
         handler = _FileHandler(self._on_file_event)
         self._observer = Observer()
-        self._observer.schedule(handler, watch_path, recursive=True)
-        self._observer.start()
-        logger.info(f"Started watching: {watch_path}")
 
+        if path:
+            # 单目录模式
+            if os.path.isdir(path):
+                self._observer.schedule(handler, path, recursive=True)
+                logger.info(f"Started watching: {path}")
+            else:
+                logger.warning(f"Watch directory does not exist: {path}")
+        else:
+            # 多目录模式
+            watch_paths = set()
+            # 主下载目录
+            if os.path.isdir(self.settings.download_dir):
+                watch_paths.add(self.settings.download_dir)
+            # 额外监控目录
+            for dir_path in self.settings.watch_dirs:
+                if os.path.isdir(dir_path):
+                    watch_paths.add(dir_path)
+                else:
+                    logger.warning(f"Watch directory does not exist: {dir_path}")
+
+            if not watch_paths:
+                logger.warning("No valid watch directories found")
+                return
+
+            for dir_path in watch_paths:
+                self._observer.schedule(handler, dir_path, recursive=True)
+                logger.info(f"Started watching: {dir_path}")
+
+        self._observer.start()
         self._check_task = asyncio.create_task(self._check_loop())
 
     async def stop(self):

@@ -16,6 +16,27 @@ from app.services.cover_service import CoverService
 router = APIRouter()
 
 
+@router.get("/media/stats")
+async def get_media_stats(db: AsyncSession = Depends(get_db)):
+    """获取媒体统计数据"""
+    from sqlalchemy import func as sqlfunc
+
+    total = (await db.execute(select(sqlfunc.count(Media.id)))).scalar() or 0
+    audio = (await db.execute(select(sqlfunc.count(Media.id)).where(Media.media_type == "audio"))).scalar() or 0
+    video = (await db.execute(select(sqlfunc.count(Media.id)).where(Media.media_type == "video"))).scalar() or 0
+    classified = (await db.execute(select(sqlfunc.count(Media.id)).where(Media.creator.isnot(None)))).scalar() or 0
+    with_rj = (await db.execute(select(sqlfunc.count(Media.id)).where(Media.rj_id.isnot(None)))).scalar() or 0
+
+    return ApiResponse(data={
+        "total": total,
+        "audio": audio,
+        "video": video,
+        "classified": classified,
+        "with_rj": with_rj,
+        "unclassified": total - classified,
+    })
+
+
 @router.get("/media", )
 async def list_media(
     page: int = Query(1, ge=1),
@@ -240,3 +261,85 @@ async def get_media_cover(media_id: int, db: AsyncSession = Depends(get_db)):
         raise NotFoundException("封面不存在")
 
     return FileResponse(cover_path)
+
+
+class OrganizePreviewRequest(BaseModel):
+    media_ids: list[int]
+
+
+class OrganizeExecuteRequest(BaseModel):
+    media_ids: list[int]
+
+
+@router.post("/media/organize/preview")
+async def preview_organize(
+    request: OrganizePreviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """预览整理操作：显示每个文件的目标路径，不实际移动"""
+    from app.services.organize_service import OrganizeService
+    from app.config import get_settings
+
+    result = await db.execute(select(Media).where(Media.id.in_(request.media_ids)))
+    medias = list(result.scalars().all())
+    if not medias:
+        raise NotFoundException("未找到指定的媒体文件")
+
+    settings = get_settings()
+    service = OrganizeService(settings.library_dir)
+
+    items = []
+    for media in medias:
+        preview = service.preview(media)
+        preview["media_id"] = media.id
+        preview["file_name"] = media.file_name
+        items.append(preview)
+
+    return ApiResponse(data={"items": items, "total": len(items)})
+
+
+@router.post("/media/organize/execute")
+async def execute_organize(
+    request: OrganizeExecuteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """执行整理操作：将文件移动到 library 目录并写入元数据"""
+    from app.services.organize_service import OrganizeService
+    from app.services.scanner import ScannerService
+    from app.config import get_settings
+
+    result = await db.execute(select(Media).where(Media.id.in_(request.media_ids)))
+    medias = list(result.scalars().all())
+    if not medias:
+        raise NotFoundException("未找到指定的媒体文件")
+
+    settings = get_settings()
+    organize_service = OrganizeService(settings.library_dir)
+    scanner = ScannerService(db)
+
+    success = 0
+    failed = 0
+    results = []
+
+    for media in medias:
+        try:
+            new_path = organize_service.move_to_library(media)
+            media.file_path = new_path
+            media.file_name = os.path.basename(new_path)
+            media.status = "processed"
+            await db.commit()
+
+            # 后处理：写标签、下载封面
+            try:
+                await scanner._post_process(media)
+            except Exception as e:
+                logger.warning(f"Post-process failed for {media.id}: {e}")
+
+            success += 1
+            results.append({"media_id": media.id, "status": "success", "new_path": new_path})
+        except Exception as e:
+            logger.error(f"Organize failed for media {media.id}: {e}")
+            failed += 1
+            results.append({"media_id": media.id, "status": "failed", "error": str(e)})
+
+    return ApiResponse(data={"success": success, "failed": failed, "results": results})

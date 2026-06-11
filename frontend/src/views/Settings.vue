@@ -18,6 +18,14 @@
           <el-form-item label="整理目录">
             <el-input v-model="settings.library_dir" placeholder="/media/library" />
           </el-form-item>
+          <el-form-item label="额外监控目录">
+            <div v-for="(dir, index) in settings.watch_dirs" :key="index" style="display: flex; gap: 8px; margin-bottom: 8px; width: 100%">
+              <el-input v-model="settings.watch_dirs[index]" placeholder="/media/another-dir" style="flex: 1" />
+              <el-button type="danger" :icon="Delete" @click="settings.watch_dirs.splice(index, 1)" />
+            </div>
+            <el-button size="small" @click="settings.watch_dirs.push('')">添加目录</el-button>
+            <span class="form-tip">除下载目录外，额外监控的目录列表</span>
+          </el-form-item>
         </div>
 
         <div class="settings-section">
@@ -89,6 +97,22 @@
         </div>
 
         <div class="settings-section">
+          <h3><el-icon><Monitor /></el-icon> Plex 设置</h3>
+          <el-form-item label="Plex 地址">
+            <el-input v-model="settings.plex_url" placeholder="http://192.168.1.100:32400" />
+            <span class="form-tip">Plex Server 的访问地址</span>
+          </el-form-item>
+          <el-form-item label="Plex Token">
+            <el-input v-model="settings.plex_token" type="password" show-password placeholder="X-Plex-Token" />
+            <span class="form-tip">在 Plex 设置 → 网络 中查看，或从浏览器请求头中获取</span>
+          </el-form-item>
+          <el-form-item label="自动刷新">
+            <el-switch v-model="settings.plex_auto_refresh" active-text="开启" inactive-text="关闭" />
+            <span class="form-tip">整理文件后自动通知 Plex 刷新媒体库</span>
+          </el-form-item>
+        </div>
+
+        <div class="settings-section">
           <h3><el-icon><Document /></el-icon> 支持格式</h3>
           <el-form-item label="音频格式">
             <div class="format-tags">
@@ -110,7 +134,7 @@
 import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { ElMessage } from 'element-plus'
-import { Check, FolderOpened, Search, Edit, MagicStick, Document, Link } from '@element-plus/icons-vue'
+import { Check, FolderOpened, Search, Edit, MagicStick, Document, Link, Monitor, Delete } from '@element-plus/icons-vue'
 
 const settingsStore = useSettingsStore()
 const loading = ref(false)

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # Directories
     download_dir: str = "/media/downloads"
     library_dir: str = "/media/library"
+    watch_dirs: list[str] = []  # 额外监控目录列表
 
     # Scan
     scan_recursive: bool = True
@@ -51,6 +52,11 @@ class Settings(BaseSettings):
     dlsite_rate_limit: float = 1.0
     dlsite_timeout: float = 10.0
     dlsite_proxy: str = ""
+
+    # Plex
+    plex_url: str = ""
+    plex_token: str = ""
+    plex_auto_refresh: bool = True
 
     # Supported formats
     supported_audio_formats: list[str] = ["mp3", "flac", "wav", "m4a", "opus", "ogg"]

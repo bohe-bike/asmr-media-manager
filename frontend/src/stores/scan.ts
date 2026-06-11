@@ -8,10 +8,10 @@ export const useScanStore = defineStore('scan', () => {
   const currentJob = ref<ScanJob | null>(null)
   const loading = ref(false)
 
-  async function startScan(path: string, scanType: string = 'full') {
+  async function startScan(path: string, scanType: string = 'full', organize: boolean = false) {
     loading.value = true
     try {
-      const res: any = await scanApi.start({ path, scan_type: scanType })
+      const res: any = await scanApi.start({ path, scan_type: scanType, organize })
       currentJob.value = res.data
       return res.data
     } finally {

@@ -43,11 +43,16 @@ export const mediaApi = {
   update: (id: number, data: Record<string, unknown>) =>
     client.patch<MediaDetail>(`/media/${id}`, data),
   getCover: (id: number) => `/api/v1/media/${id}/cover`,
+  stats: () => client.get('/media/stats'),
+  organizePreview: (data: { media_ids: number[] }) =>
+    client.post('/media/organize/preview', data),
+  organizeExecute: (data: { media_ids: number[] }) =>
+    client.post('/media/organize/execute', data),
 }
 
 // Scan API
 export const scanApi = {
-  start: (data: { path: string; scan_type?: string; recursive?: boolean }) =>
+  start: (data: { path: string; scan_type?: string; recursive?: boolean; organize?: boolean }) =>
     client.post<ScanJob>('/scan', data),
   getJob: (jobId: number) =>
     client.get<ScanJob>(`/scan/${jobId}`),

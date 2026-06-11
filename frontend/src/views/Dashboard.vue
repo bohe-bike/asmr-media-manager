@@ -9,7 +9,7 @@
     </div>
 
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stat-card stat-total">
           <div class="stat-icon">
             <el-icon :size="32"><Files /></el-icon>
@@ -20,29 +20,29 @@
           </div>
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stat-card stat-audio">
           <div class="stat-icon">
             <el-icon :size="32"><Headset /></el-icon>
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.audioCount }}</div>
-            <div class="stat-label">音频文件</div>
+            <div class="stat-label">音频</div>
           </div>
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stat-card stat-video">
           <div class="stat-icon">
             <el-icon :size="32"><VideoCamera /></el-icon>
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.videoCount }}</div>
-            <div class="stat-label">视频文件</div>
+            <div class="stat-label">视频</div>
           </div>
         </div>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stat-card stat-classified">
           <div class="stat-icon">
             <el-icon :size="32"><CircleCheck /></el-icon>
@@ -50,6 +50,17 @@
           <div class="stat-info">
             <div class="stat-value">{{ stats.classified }}</div>
             <div class="stat-label">已分类</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="4">
+        <div class="stat-card stat-unclassified">
+          <div class="stat-icon">
+            <el-icon :size="32"><Warning /></el-icon>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.unclassified }}</div>
+            <div class="stat-label">未分类</div>
           </div>
         </div>
       </el-col>
@@ -145,7 +156,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Refresh, FolderOpened, Search, Clock, Files, Headset, VideoCamera, CircleCheck } from '@element-plus/icons-vue'
+import { Refresh, FolderOpened, Search, Clock, Files, Headset, VideoCamera, CircleCheck, Warning } from '@element-plus/icons-vue'
 import { mediaApi, scanApi } from '@/api'
 import { useScanStore } from '@/stores/scan'
 import type { ScanJob } from '@/types'
@@ -162,6 +173,7 @@ const stats = ref({
   audioCount: 0,
   videoCount: 0,
   classified: 0,
+  unclassified: 0,
 })
 
 onMounted(() => {
@@ -170,8 +182,12 @@ onMounted(() => {
 
 async function refresh() {
   try {
-    const res: any = await mediaApi.list({ page_size: 1 })
+    const res: any = await mediaApi.stats()
     stats.value.totalMedia = res.data.total
+    stats.value.audioCount = res.data.audio
+    stats.value.videoCount = res.data.video
+    stats.value.classified = res.data.classified
+    stats.value.unclassified = res.data.unclassified
   } catch {}
 
   try {
@@ -266,6 +282,10 @@ function formatTime(t: string) {
 
 .stat-classified .stat-icon {
   background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.stat-unclassified .stat-icon {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
 }
 
 .stat-value {

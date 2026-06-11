@@ -23,6 +23,7 @@ def _job_response(job: ScanJob) -> ScanJobResponse:
         processed_files=job.processed_files,
         new_files=job.new_files,
         error_files=job.error_files,
+        organized_files=job.organized_files,
         started_at=job.started_at,
         finished_at=job.finished_at,
         created_at=job.created_at,
@@ -30,10 +31,10 @@ def _job_response(job: ScanJob) -> ScanJobResponse:
     )
 
 
-async def _run_scan_background(job_id: int, recursive: bool) -> None:
+async def _run_scan_background(job_id: int, recursive: bool, organize: bool = False) -> None:
     async with async_session() as db:
         scanner = ScannerService(db)
-        await scanner.run_scan_job(job_id, recursive)
+        await scanner.run_scan_job(job_id, recursive, organize)
 
 
 @router.post("/scan")
@@ -49,7 +50,7 @@ async def start_scan(
 
     scanner = ScannerService(db)
     job = await scanner.create_scan_job(request.path, request.scan_type, request.recursive)
-    background_tasks.add_task(_run_scan_background, job.id, request.recursive)
+    background_tasks.add_task(_run_scan_background, job.id, request.recursive, request.organize)
 
     return ApiResponse(data=_job_response(job))
 

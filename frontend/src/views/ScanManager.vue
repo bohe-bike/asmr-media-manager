@@ -21,7 +21,7 @@
               <el-input v-model="scanPath" placeholder="/media/downloads" size="large" :prefix-icon="FolderOpened" />
             </el-form-item>
           </el-col>
-          <el-col :span="6">
+          <el-col :span="4">
             <el-form-item label="扫描类型">
               <el-radio-group v-model="scanType" size="large">
                 <el-radio-button value="full">全量</el-radio-button>
@@ -30,6 +30,11 @@
             </el-form-item>
           </el-col>
           <el-col :span="4">
+            <el-form-item label=" ">
+              <el-checkbox v-model="autoOrganize" size="large">扫描后自动整理</el-checkbox>
+            </el-form-item>
+          </el-col>
+          <el-col :span="3">
             <el-form-item label=" ">
               <el-button type="primary" size="large" @click="handleScan" :loading="scanning" style="width: 100%">
                 <el-icon><Search /></el-icon> 开始扫描
@@ -52,25 +57,31 @@
         </div>
       </template>
       <el-row :gutter="20" class="progress-stats">
-        <el-col :span="6">
+        <el-col :span="5">
           <div class="progress-stat">
             <div class="progress-stat-value">{{ currentJob.total_files }}</div>
             <div class="progress-stat-label">总文件</div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="5">
           <div class="progress-stat">
             <div class="progress-stat-value primary">{{ currentJob.processed_files }}</div>
             <div class="progress-stat-label">已处理</div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="5">
           <div class="progress-stat">
             <div class="progress-stat-value success">{{ currentJob.new_files }}</div>
             <div class="progress-stat-label">新文件</div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="4">
+          <div class="progress-stat">
+            <div class="progress-stat-value" style="color: #e6a23c">{{ currentJob.organized_files || 0 }}</div>
+            <div class="progress-stat-label">已整理</div>
+          </div>
+        </el-col>
+        <el-col :span="5">
           <div class="progress-stat">
             <div class="progress-stat-value danger">{{ currentJob.error_files }}</div>
             <div class="progress-stat-label">错误</div>
@@ -133,6 +144,7 @@ import { Search, FolderOpened, Loading, Clock, CircleCheck } from '@element-plus
 const scanStore = useScanStore()
 const scanPath = ref('')
 const scanType = ref('full')
+const autoOrganize = ref(false)
 const scanning = ref(false)
 const loading = ref(false)
 const currentJob = ref<ScanJob | null>(null)
@@ -195,7 +207,7 @@ async function handleScan() {
   }
   scanning.value = true
   try {
-    const result = await scanStore.startScan(scanPath.value, scanType.value)
+    const result = await scanStore.startScan(scanPath.value, scanType.value, autoOrganize.value)
     currentJob.value = result
     // Connect WebSocket for real-time updates
     if (result.status === 'running') {

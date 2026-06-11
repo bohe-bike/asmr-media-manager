@@ -5,6 +5,7 @@ import { settingsApi } from '@/api'
 interface Settings {
   download_dir: string
   library_dir: string
+  watch_dirs: string[]
   watch_enabled: boolean
   stable_seconds: number
   audio_rename_pattern: string
@@ -24,6 +25,9 @@ interface Settings {
   dlsite_rate_limit: number
   dlsite_timeout: number
   dlsite_proxy: string
+  plex_url: string
+  plex_token: string
+  plex_auto_refresh: boolean
 }
 
 export const useSettingsStore = defineStore('settings', () => {

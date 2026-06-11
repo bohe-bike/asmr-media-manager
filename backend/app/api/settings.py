@@ -10,6 +10,7 @@ router = APIRouter()
 class SettingsResponse(BaseModel):
     download_dir: str
     library_dir: str
+    watch_dirs: list[str]
     watch_enabled: bool
     stable_seconds: int
     audio_rename_pattern: str
@@ -29,11 +30,15 @@ class SettingsResponse(BaseModel):
     dlsite_rate_limit: float
     dlsite_timeout: float
     dlsite_proxy: str
+    plex_url: str
+    plex_token: str
+    plex_auto_refresh: bool
 
 
 class SettingsUpdate(BaseModel):
     download_dir: str | None = None
     library_dir: str | None = None
+    watch_dirs: list[str] | None = None
     watch_enabled: bool | None = None
     stable_seconds: int | None = None
     audio_rename_pattern: str | None = None
@@ -49,12 +54,16 @@ class SettingsUpdate(BaseModel):
     dlsite_rate_limit: float | None = None
     dlsite_timeout: float | None = None
     dlsite_proxy: str | None = None
+    plex_url: str | None = None
+    plex_token: str | None = None
+    plex_auto_refresh: bool | None = None
 
 
 def _build_response(settings) -> SettingsResponse:
     return SettingsResponse(
         download_dir=settings.download_dir,
         library_dir=settings.library_dir,
+        watch_dirs=settings.watch_dirs,
         watch_enabled=settings.watch_enabled,
         stable_seconds=settings.stable_seconds,
         audio_rename_pattern=settings.audio_rename_pattern,
@@ -74,6 +83,9 @@ def _build_response(settings) -> SettingsResponse:
         dlsite_rate_limit=settings.dlsite_rate_limit,
         dlsite_timeout=settings.dlsite_timeout,
         dlsite_proxy=settings.dlsite_proxy,
+        plex_url=settings.plex_url,
+        plex_token=settings.plex_token,
+        plex_auto_refresh=settings.plex_auto_refresh,
     )
 
 

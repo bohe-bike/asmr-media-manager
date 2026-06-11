@@ -64,6 +64,7 @@ export interface ScanJob {
   processed_files: number
   new_files: number
   error_files: number
+  organized_files: number
   started_at?: string
   finished_at?: string
   created_at: string

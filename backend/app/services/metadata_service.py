@@ -104,7 +104,7 @@ class MetadataService:
     async def write_audio_tags(self, file_path: str, tags: dict, cover_path: str | None = None) -> bool:
         """将标签写入音频文件，支持 MP3/FLAC/M4A/OPUS/OGG。
 
-        tags: title, artist, album_artist, genre, comment
+        tags: title, album, artist, album_artist, genre, comment
         cover_path: 封面图片路径（可选）
         """
         try:
@@ -112,7 +112,7 @@ class MetadataService:
             from mutagen.flac import FLAC, Picture
             from mutagen.mp3 import MP3
             from mutagen.mp4 import MP4, MP4Cover
-            from mutagen.id3 import TIT2, TPE1, TPE2, TCON, COMM, APIC
+            from mutagen.id3 import TIT2, TALB, TPE1, TPE2, TCON, COMM, APIC
             from mutagen.oggopus import OggOpus
             from mutagen.oggvorbis import OggVorbis
 
@@ -134,6 +134,8 @@ class MetadataService:
                     audio.add_tags()
                 if "title" in tags:
                     audio.tags["TIT2"] = TIT2(encoding=3, text=tags["title"])
+                if "album" in tags:
+                    audio.tags["TALB"] = TALB(encoding=3, text=tags["album"])
                 if "artist" in tags:
                     audio.tags["TPE1"] = TPE1(encoding=3, text=tags["artist"])
                 if "album_artist" in tags:
@@ -150,6 +152,8 @@ class MetadataService:
             elif isinstance(audio, FLAC):
                 if "title" in tags:
                     audio["TITLE"] = tags["title"]
+                if "album" in tags:
+                    audio["ALBUM"] = tags["album"]
                 if "artist" in tags:
                     audio["ARTIST"] = tags["artist"]
                 if "album_artist" in tags:
@@ -170,6 +174,8 @@ class MetadataService:
             elif isinstance(audio, MP4):
                 if "title" in tags:
                     audio["\xa9nam"] = [tags["title"]]
+                if "album" in tags:
+                    audio["\xa9alb"] = [tags["album"]]
                 if "artist" in tags:
                     audio["\xa9ART"] = [tags["artist"]]
                 if "album_artist" in tags:
@@ -185,6 +191,8 @@ class MetadataService:
             elif isinstance(audio, (OggOpus, OggVorbis)):
                 if "title" in tags:
                     audio["title"] = [tags["title"]]
+                if "album" in tags:
+                    audio["album"] = [tags["album"]]
                 if "artist" in tags:
                     audio["artist"] = [tags["artist"]]
                 if "album_artist" in tags:
