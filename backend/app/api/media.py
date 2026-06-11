@@ -346,3 +346,78 @@ async def execute_organize(
             results.append({"media_id": media.id, "status": "failed", "error": str(e)})
 
     return ApiResponse(data={"success": success, "failed": failed, "results": results})
+
+
+@router.post("/media/reorganize")
+async def reorganize_files(
+    request: OrganizeExecuteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """重新整理文件到新的目录结构（作者/[RJ号] 标题/文件）。
+
+    适用于旧的平铺结构迁移到新的三级结构。
+    """
+    from app.services.organize_service import OrganizeService
+    from app.services.scanner import ScannerService
+    from app.config import get_settings
+
+    result = await db.execute(select(Media).where(Media.id.in_(request.media_ids)))
+    medias = list(result.scalars().all())
+    if not medias:
+        raise NotFoundException("未找到指定的媒体文件")
+
+    settings = get_settings()
+    organize_service = OrganizeService(settings.library_dir)
+    scanner = ScannerService(db)
+
+    success = 0
+    failed = 0
+    skipped = 0
+    results = []
+
+    for media in medias:
+        try:
+            # 检查是否已经在正确的目录结构中
+            preview = organize_service.preview(media)
+            if preview["new_path"] == media.file_path:
+                skipped += 1
+                results.append({"media_id": media.id, "status": "skipped", "reason": "已在正确目录"})
+                continue
+
+            # 如果文件不在预期位置（可能已经被移动过），跳过
+            if not os.path.exists(media.file_path):
+                # 尝试在 library 目录中查找
+                possible_path = os.path.join(
+                    settings.library_dir,
+                    media.creator or "未分类",
+                    organize_service._build_album_dir_name(media),
+                    media.file_name,
+                )
+                if os.path.exists(possible_path):
+                    media.file_path = possible_path
+                    skipped += 1
+                    results.append({"media_id": media.id, "status": "skipped", "reason": "文件已在新位置"})
+                    continue
+                failed += 1
+                results.append({"media_id": media.id, "status": "failed", "error": "文件不存在"})
+                continue
+
+            new_path = organize_service.move_to_library(media)
+            media.file_path = new_path
+            media.file_name = os.path.basename(new_path)
+            await db.commit()
+
+            # 重新写入标签
+            try:
+                await scanner._post_process(media)
+            except Exception as e:
+                logger.warning(f"Post-process failed for {media.id}: {e}")
+
+            success += 1
+            results.append({"media_id": media.id, "status": "success", "new_path": new_path})
+        except Exception as e:
+            logger.error(f"Reorganize failed for media {media.id}: {e}")
+            failed += 1
+            results.append({"media_id": media.id, "status": "failed", "error": str(e)})
+
+    return ApiResponse(data={"success": success, "skipped": skipped, "failed": failed, "results": results})

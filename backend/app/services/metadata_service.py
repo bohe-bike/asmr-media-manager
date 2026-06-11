@@ -101,12 +101,40 @@ class MetadataService:
             logger.warning(f"Failed to read video metadata for {file_path}: {e}")
             return {}
 
-    async def write_audio_tags(self, file_path: str, tags: dict, cover_path: str | None = None) -> bool:
+    async def write_audio_tags(self, file_path: str, tags: dict, cover_path: str | None = None, max_retries: int = 2) -> bool:
         """将标签写入音频文件，支持 MP3/FLAC/M4A/OPUS/OGG。
 
         tags: title, album, artist, album_artist, genre, comment
         cover_path: 封面图片路径（可选）
+        max_retries: 失败重试次数
         """
+        import asyncio
+
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                result = self._write_audio_tags_sync(file_path, tags, cover_path)
+                if result:
+                    return True
+                # 如果返回 False（非异常），不重试
+                return False
+            except PermissionError as e:
+                # 文件被占用，等待后重试
+                last_error = e
+                if attempt < max_retries:
+                    logger.warning(f"File locked, retrying ({attempt + 1}/{max_retries}): {file_path}")
+                    await asyncio.sleep(1.0 * (attempt + 1))
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    logger.warning(f"Tag write failed, retrying ({attempt + 1}/{max_retries}): {e}")
+                    await asyncio.sleep(0.5 * (attempt + 1))
+
+        logger.error(f"Failed to write audio tags for {file_path} after {max_retries + 1} attempts: {last_error}")
+        return False
+
+    def _write_audio_tags_sync(self, file_path: str, tags: dict, cover_path: str | None = None) -> bool:
+        """同步写入音频标签（内部方法）"""
         try:
             from mutagen import File as MutagenFile
             from mutagen.flac import FLAC, Picture

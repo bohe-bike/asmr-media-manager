@@ -25,6 +25,15 @@ class DlsiteService:
         self._settings = get_settings()
         self._cache: dict[str, tuple[float, dict]] = {}
         self._last_request_time: float = 0.0
+        self._semaphore: asyncio.Semaphore | None = None
+
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        """获取并发控制信号量（懒初始化）"""
+        if self._semaphore is None:
+            # 最大并发数 = 限流速率的 2 倍，但不超过 5
+            max_concurrent = min(max(int(self._settings.dlsite_rate_limit * 2), 1), 5)
+            self._semaphore = asyncio.Semaphore(max_concurrent)
+        return self._semaphore
 
     @property
     def enabled(self) -> bool:
@@ -273,6 +282,49 @@ class DlsiteService:
         result["release_date"] = data.get("release_date")
 
         return result
+
+    async def fetch_batch(self, work_ids: list[str]) -> dict[str, dict[str, Any] | None]:
+        """批量获取多个作品信息，支持并发+限流。
+
+        返回 {work_id: data_or_none} 字典。
+        """
+        if not self.enabled:
+            return {wid: None for wid in work_ids}
+
+        # 先检查缓存，只对未缓存的发起请求
+        ttl = self._settings.dlsite_cache_ttl
+        results: dict[str, dict[str, Any] | None] = {}
+        to_fetch: list[str] = []
+
+        for wid in work_ids:
+            wid = wid.upper().strip()
+            if wid in self._cache:
+                ts, data = self._cache[wid]
+                if time.time() - ts < ttl:
+                    results[wid] = data
+                    continue
+                del self._cache[wid]
+            to_fetch.append(wid)
+            results[wid] = None
+
+        if not to_fetch:
+            return results
+
+        # 并发获取，通过信号量控制并发数
+        sem = self._get_semaphore()
+
+        async def _fetch_one(wid: str):
+            async with sem:
+                await self._rate_limit()
+                data = await self._fetch_product(wid)
+                if data is None:
+                    data = await self._fetch_product_legacy(wid)
+                if data:
+                    self._cache[wid] = (time.time(), data)
+                results[wid] = data
+
+        await asyncio.gather(*[_fetch_one(wid) for wid in to_fetch])
+        return results
 
     async def _rate_limit(self) -> None:
         """限流：确保请求间隔不低于设定值"""

@@ -199,7 +199,7 @@ async def fetch_dlsite_metadata(
     request: DlsiteFetchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """根据 RJ/DL 号从 DLsite 获取元数据并补全媒体信息"""
+    """根据 RJ/DL 号从 DLsite 获取元数据并补全媒体信息（并发批量请求）"""
     dlsite = DlsiteService()
     if not dlsite.enabled:
         raise ValidationException("DLsite 服务未启用，请在设置中开启")
@@ -215,61 +215,72 @@ async def fetch_dlsite_metadata(
     failed = 0
     results = []
 
+    # 收集需要查询的 work_id
+    media_by_work_id: dict[str, list] = {}
     for media in medias:
-        work_id = media.rj_id or media.dl_id
+        work_id = (media.rj_id or media.dl_id or "").upper().strip()
         if not work_id:
             skipped += 1
             results.append({"id": media.id, "status": "no_rj_id"})
             continue
+        if work_id not in media_by_work_id:
+            media_by_work_id[work_id] = []
+        media_by_work_id[work_id].append(media)
 
-        try:
-            data = await dlsite.fetch_by_id(work_id)
-            if not data:
+    # 批量并发获取 DLsite 数据
+    work_ids = list(media_by_work_id.keys())
+    dlsite_results = await dlsite.fetch_batch(work_ids)
+
+    # 应用结果到每个 media
+    for work_id, data in dlsite_results.items():
+        medias_for_id = media_by_work_id.get(work_id, [])
+        for media in medias_for_id:
+            try:
+                if not data:
+                    failed += 1
+                    results.append({"id": media.id, "status": "fetch_failed"})
+                    continue
+
+                changed = False
+                if data.get("title") and (not media.title or request.overwrite):
+                    media.title = data["title"]
+                    changed = True
+                if data.get("creator") and (not media.creator or request.overwrite):
+                    media.creator = data["creator"]
+                    changed = True
+                if data.get("circle") and (not media.circle or request.overwrite):
+                    media.circle = data["circle"]
+                    changed = True
+                if data.get("cv") and (not media.cv or request.overwrite):
+                    media.cv = data["cv"]
+                    changed = True
+                if data.get("language") and (not media.language or request.overwrite):
+                    media.language = data["language"]
+                    changed = True
+                if data.get("description") and (not media.description or request.overwrite):
+                    media.description = data["description"]
+                    changed = True
+                if data.get("cover_url") and (not media.cover_url or request.overwrite):
+                    media.cover_url = data["cover_url"]
+                    changed = True
+
+                # 自动添加 DLsite 返回的标签
+                if data.get("tags"):
+                    for tag_name in data["tags"]:
+                        tag = await tag_service.get_or_create_tag(tag_name, category="dlsite")
+                        await tag_service.add_tags_to_media(media.id, [tag.id], source="dlsite")
+
+                if changed:
+                    media.metadata_source = "dlsite"
+                    updated += 1
+                    results.append({"id": media.id, "status": "updated", "work_id": work_id})
+                else:
+                    results.append({"id": media.id, "status": "no_change"})
+
+            except Exception as e:
+                logger.error(f"DLsite 补全失败 media {media.id} ({work_id}): {e}")
                 failed += 1
-                results.append({"id": media.id, "status": "fetch_failed"})
-                continue
-
-            changed = False
-            # 仅在字段为空或 overwrite=True 时更新
-            if data.get("title") and (not media.title or request.overwrite):
-                media.title = data["title"]
-                changed = True
-            if data.get("creator") and (not media.creator or request.overwrite):
-                media.creator = data["creator"]
-                changed = True
-            if data.get("circle") and (not media.circle or request.overwrite):
-                media.circle = data["circle"]
-                changed = True
-            if data.get("cv") and (not media.cv or request.overwrite):
-                media.cv = data["cv"]
-                changed = True
-            if data.get("language") and (not media.language or request.overwrite):
-                media.language = data["language"]
-                changed = True
-            if data.get("description") and (not media.description or request.overwrite):
-                media.description = data["description"]
-                changed = True
-            if data.get("cover_url") and (not media.cover_url or request.overwrite):
-                media.cover_url = data["cover_url"]
-                changed = True
-
-            # 自动添加 DLsite 返回的标签
-            if data.get("tags"):
-                for tag_name in data["tags"]:
-                    tag = await tag_service.get_or_create_tag(tag_name, category="dlsite")
-                    await tag_service.add_tags_to_media(media.id, [tag.id], source="dlsite")
-
-            if changed:
-                media.metadata_source = "dlsite"
-                updated += 1
-                results.append({"id": media.id, "status": "updated", "work_id": work_id})
-            else:
-                results.append({"id": media.id, "status": "no_change"})
-
-        except Exception as e:
-            logger.error(f"DLsite 补全失败 media {media.id} ({work_id}): {e}")
-            failed += 1
-            results.append({"id": media.id, "status": "error", "error": str(e)})
+                results.append({"id": media.id, "status": "error", "error": str(e)})
 
     await db.commit()
     return ApiResponse(data={

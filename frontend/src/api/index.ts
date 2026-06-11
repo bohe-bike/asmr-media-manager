@@ -48,6 +48,8 @@ export const mediaApi = {
     client.post('/media/organize/preview', data),
   organizeExecute: (data: { media_ids: number[] }) =>
     client.post('/media/organize/execute', data),
+  reorganize: (data: { media_ids: number[] }) =>
+    client.post('/media/reorganize', data),
 }
 
 // Scan API
