@@ -81,7 +81,7 @@ def _write_nfo(media: Media) -> str:
         "artist": media.creator or media.cv,
         "genre": "ASMR",
         "tag": media.rj_id,
-        "plot": media.error_message,
+        "plot": media.description,
     }
     for key, value in fields.items():
         if value:

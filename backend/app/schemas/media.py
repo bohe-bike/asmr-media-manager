@@ -85,3 +85,4 @@ class MediaUpdate(BaseModel):
     rj_id: str | None = None
     platform: str | None = None
     language: str | None = None
+    description: str | None = None

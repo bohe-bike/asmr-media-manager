@@ -94,6 +94,8 @@ async def list_media(
                 status=m.status,
                 tags=tags,
                 cover_url=f"/api/v1/media/{m.id}/cover" if m.cover_path else None,
+                description=m.description,
+                metadata_source=m.metadata_source,
                 created_at=m.created_at,
             )
         )
@@ -147,6 +149,8 @@ async def get_media(media_id: int, db: AsyncSession = Depends(get_db)):
         error_message=media.error_message,
         tags=tags,
         cover_url=f"/api/v1/media/{media.id}/cover" if media.cover_path else None,
+        description=media.description,
+        metadata_source=media.metadata_source,
         created_at=media.created_at,
         updated_at=media.updated_at,
         scanned_at=media.scanned_at,
@@ -210,6 +214,8 @@ async def update_media(
         error_message=media.error_message,
         tags=tags,
         cover_url=f"/api/v1/media/{media.id}/cover" if media.cover_path else None,
+        description=media.description,
+        metadata_source=media.metadata_source,
         created_at=media.created_at,
         updated_at=media.updated_at,
         scanned_at=media.scanned_at,

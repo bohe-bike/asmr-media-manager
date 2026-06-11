@@ -18,6 +18,12 @@ interface Settings {
   ocr_enabled: boolean
   cover_filenames: string[]
   unclassified_dir: string
+  dlsite_enabled: boolean
+  dlsite_api_base: string
+  dlsite_cache_ttl: number
+  dlsite_rate_limit: number
+  dlsite_timeout: number
+  dlsite_proxy: string
 }
 
 export const useSettingsStore = defineStore('settings', () => {

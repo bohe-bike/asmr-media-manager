@@ -100,6 +100,8 @@ export const metadataApi = {
     client.post('/metadata/write-tags', data),
   aiAnalyze: (data: { media_ids: number[] }) =>
     client.post('/metadata/ai-analyze', data),
+  fetchDlsite: (data: { media_ids: number[]; overwrite?: boolean }) =>
+    client.post('/metadata/fetch-dlsite', data),
 }
 
 // Settings API

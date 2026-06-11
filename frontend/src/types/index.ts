@@ -20,6 +20,8 @@ export interface MediaItem {
   status: string
   tags: Tag[]
   cover_url?: string
+  description?: string
+  metadata_source?: string
   created_at: string
 }
 

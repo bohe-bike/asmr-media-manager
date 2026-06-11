@@ -23,6 +23,12 @@ class SettingsResponse(BaseModel):
     ocr_enabled: bool
     cover_filenames: list[str]
     unclassified_dir: str
+    dlsite_enabled: bool
+    dlsite_api_base: str
+    dlsite_cache_ttl: int
+    dlsite_rate_limit: float
+    dlsite_timeout: float
+    dlsite_proxy: str
 
 
 class SettingsUpdate(BaseModel):
@@ -37,6 +43,12 @@ class SettingsUpdate(BaseModel):
     ai_api_key: str | None = None
     ai_model: str | None = None
     ocr_enabled: bool | None = None
+    dlsite_enabled: bool | None = None
+    dlsite_api_base: str | None = None
+    dlsite_cache_ttl: int | None = None
+    dlsite_rate_limit: float | None = None
+    dlsite_timeout: float | None = None
+    dlsite_proxy: str | None = None
 
 
 def _build_response(settings) -> SettingsResponse:
@@ -56,6 +68,12 @@ def _build_response(settings) -> SettingsResponse:
         ocr_enabled=settings.ocr_enabled,
         cover_filenames=settings.cover_filenames,
         unclassified_dir=settings.unclassified_dir,
+        dlsite_enabled=settings.dlsite_enabled,
+        dlsite_api_base=settings.dlsite_api_base,
+        dlsite_cache_ttl=settings.dlsite_cache_ttl,
+        dlsite_rate_limit=settings.dlsite_rate_limit,
+        dlsite_timeout=settings.dlsite_timeout,
+        dlsite_proxy=settings.dlsite_proxy,
     )
 
 

@@ -51,6 +51,9 @@
               <el-descriptions-item label="状态">
                 <el-tag :type="statusType(media.status)" effect="light">{{ statusLabel(media.status) }}</el-tag>
               </el-descriptions-item>
+              <el-descriptions-item v-if="media.metadata_source" label="数据来源">
+                <el-tag :type="sourceType(media.metadata_source)" effect="light">{{ sourceLabel(media.metadata_source) }}</el-tag>
+              </el-descriptions-item>
             </el-descriptions>
           </el-card>
         </el-col>
@@ -64,6 +67,9 @@
             <div style="margin-left: auto; display: flex; gap: 8px">
               <el-button type="success" size="small" @click="aiAnalyze" :loading="analyzing" :disabled="!settingsStore.settings?.ai_enabled">
                 <el-icon><MagicStick /></el-icon> AI 分析
+              </el-button>
+              <el-button type="warning" size="small" @click="fetchDlsite" :loading="fetchingDlsite" :disabled="!settingsStore.settings?.dlsite_enabled">
+                <el-icon><Link /></el-icon> DLsite 补全
               </el-button>
               <el-button type="primary" size="small" @click="saveMetadata" :loading="saving">
                 <el-icon><Check /></el-icon> 保存
@@ -125,6 +131,9 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-form-item label="描述">
+            <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="作品描述（来自 DLsite 或手动填写）" />
+          </el-form-item>
         </el-form>
       </el-card>
 
@@ -171,7 +180,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { tagsApi, metadataApi } from '@/api'
 import type { MediaDetail } from '@/types'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Headset, VideoCamera, InfoFilled, EditPen, Check, PriceTag, Plus, MagicStick } from '@element-plus/icons-vue'
+import { ArrowLeft, Headset, VideoCamera, InfoFilled, EditPen, Check, PriceTag, Plus, MagicStick, Link } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,12 +191,13 @@ const media = ref<MediaDetail | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const analyzing = ref(false)
+const fetchingDlsite = ref(false)
 const coverError = ref(false)
 const showTagInput = ref(false)
 const newTagName = ref('')
 
 const editForm = reactive({
-  title: '', rj_id: '', cv: '', creator: '', circle: '', platform: '', language: '',
+  title: '', rj_id: '', cv: '', creator: '', circle: '', platform: '', language: '', description: '',
 })
 
 onMounted(async () => {
@@ -199,6 +209,7 @@ onMounted(async () => {
     Object.assign(editForm, {
       title: data.title || '', rj_id: data.rj_id || '', cv: data.cv || '',
       creator: data.creator || '', circle: data.circle || '', platform: data.platform || '', language: data.language || '',
+      description: data.description || '',
     })
     if (!settingsStore.settings) {
       settingsStore.fetchSettings()
@@ -245,6 +256,36 @@ async function aiAnalyze() {
   }
 }
 
+async function fetchDlsite() {
+  if (!media.value) return
+  fetchingDlsite.value = true
+  try {
+    const res: any = await metadataApi.fetchDlsite({ media_ids: [media.value.id] })
+    const result = res.data.results?.[0]
+    if (result?.status === 'updated') {
+      // 重新加载详情
+      const data = await mediaStore.fetchMediaDetail(media.value.id)
+      media.value = data
+      Object.assign(editForm, {
+        title: data.title || '', rj_id: data.rj_id || '', cv: data.cv || '',
+        creator: data.creator || '', circle: data.circle || '', platform: data.platform || '', language: data.language || '',
+        description: data.description || '',
+      })
+      ElMessage.success('DLsite 信息补全完成')
+    } else if (result?.status === 'no_rj_id') {
+      ElMessage.warning('该媒体没有 RJ/DL 号，无法从 DLsite 获取信息')
+    } else if (result?.status === 'no_change') {
+      ElMessage.info('DLsite 信息已是最新')
+    } else {
+      ElMessage.warning('DLsite 补全失败，请检查网络或代理设置')
+    }
+  } catch {
+    ElMessage.error('DLsite 补全失败，请检查设置中的 DLsite 配置')
+  } finally {
+    fetchingDlsite.value = false
+  }
+}
+
 async function addTag() {
   if (!newTagName.value.trim() || !media.value) return
   try {
@@ -288,6 +329,16 @@ function statusType(s: string) {
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待处理', processed: '已处理', renamed: '已重命名', error: '错误' }
+  return map[s] || s
+}
+
+function sourceType(s: string) {
+  const map: Record<string, string> = { manual: 'danger', dlsite: 'warning', parsed: 'info', metadata: 'success' }
+  return map[s] || 'info'
+}
+
+function sourceLabel(s: string) {
+  const map: Record<string, string> = { manual: '手动规则', dlsite: 'DLsite', parsed: '文件名解析', metadata: '文件元数据' }
   return map[s] || s
 }
 </script>

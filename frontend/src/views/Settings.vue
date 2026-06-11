@@ -62,6 +62,33 @@
         </div>
 
         <div class="settings-section">
+          <h3><el-icon><Link /></el-icon> DLsite 设置</h3>
+          <el-form-item label="启用DLsite">
+            <el-switch v-model="settings.dlsite_enabled" active-text="开启" inactive-text="关闭" />
+            <span class="form-tip">根据 RJ/DL 号自动从 DLsite 获取作品元数据</span>
+          </el-form-item>
+          <el-form-item label="API地址">
+            <el-input v-model="settings.dlsite_api_base" :disabled="!settings.dlsite_enabled" placeholder="https://www.dlsite.com/maniax/api" />
+          </el-form-item>
+          <el-form-item label="代理地址">
+            <el-input v-model="settings.dlsite_proxy" :disabled="!settings.dlsite_enabled" placeholder="http://127.0.0.1:7890（留空直连）" />
+            <span class="form-tip">大陆网络需要配置代理才能访问 DLsite</span>
+          </el-form-item>
+          <el-form-item label="请求超时">
+            <el-input-number v-model="settings.dlsite_timeout" :disabled="!settings.dlsite_enabled" :min="3" :max="60" />
+            <span class="form-tip">秒</span>
+          </el-form-item>
+          <el-form-item label="缓存时间">
+            <el-input-number v-model="settings.dlsite_cache_ttl" :disabled="!settings.dlsite_enabled" :min="60" :max="86400" :step="300" />
+            <span class="form-tip">秒，避免重复请求</span>
+          </el-form-item>
+          <el-form-item label="请求频率">
+            <el-input-number v-model="settings.dlsite_rate_limit" :disabled="!settings.dlsite_enabled" :min="0.1" :max="10" :step="0.5" :precision="1" />
+            <span class="form-tip">每秒最大请求数</span>
+          </el-form-item>
+        </div>
+
+        <div class="settings-section">
           <h3><el-icon><Document /></el-icon> 支持格式</h3>
           <el-form-item label="音频格式">
             <div class="format-tags">
@@ -83,7 +110,7 @@
 import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { ElMessage } from 'element-plus'
-import { Check, FolderOpened, Search, Edit, MagicStick, Document } from '@element-plus/icons-vue'
+import { Check, FolderOpened, Search, Edit, MagicStick, Document, Link } from '@element-plus/icons-vue'
 
 const settingsStore = useSettingsStore()
 const loading = ref(false)
