@@ -14,17 +14,32 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///app/backend/data/asmr_manager.db
       - DOWNLOAD_DIR=/media/downloads
       - LIBRARY_DIR=/media/library
+      - WATCH_DIRS=${WATCH_DIRS:-[]}
+      - WATCH_ENABLED=${WATCH_ENABLED:-true}
+      - WATCH_AUTO_ORGANIZE=${WATCH_AUTO_ORGANIZE:-true}
+      - STABLE_SECONDS=${STABLE_SECONDS:-10}
+      # DLsite
+      - DLSITE_ENABLED=${DLSITE_ENABLED:-true}
+      - DLSITE_API_BASE=${DLSITE_API_BASE:-https://www.dlsite.com/maniax/api}
+      - DLSITE_CACHE_TTL=${DLSITE_CACHE_TTL:-1800}
+      - DLSITE_RATE_LIMIT=${DLSITE_RATE_LIMIT:-1.0}
+      - DLSITE_TIMEOUT=${DLSITE_TIMEOUT:-10.0}
+      - DLSITE_PROXY=${DLSITE_PROXY:-}
+      # Plex
+      - PLEX_URL=${PLEX_URL:-}
+      - PLEX_TOKEN=${PLEX_TOKEN:-}
+      - PLEX_AUTO_REFRESH=${PLEX_AUTO_REFRESH:-true}
+      # AI
       - AI_ENABLED=${AI_ENABLED:-false}
       - AI_API_URL=${AI_API_URL:-}
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
-      - WATCH_ENABLED=${WATCH_ENABLED:-true}
-      - STABLE_SECONDS=${STABLE_SECONDS:-10}
+      # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/api/v1/settings"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:80/api/v1/settings || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s

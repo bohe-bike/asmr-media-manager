@@ -30,6 +30,9 @@ call venv\Scripts\activate.bat
 pip install -r requirements.txt
 echo Backend done.
 echo.
+echo Initializing database...
+python migrate.py
+echo.
 echo [2/2] Install frontend dependencies...
 cd /d "%~dp0frontend"
 call npm install

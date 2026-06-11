@@ -15,7 +15,23 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:///app/data/asmr_manager.db
       - DOWNLOAD_DIR=/media/downloads
       - LIBRARY_DIR=/media/library
-      - LOG_LEVEL=INFO
+      - WATCH_DIRS=${WATCH_DIRS:-[]}
+      - WATCH_ENABLED=${WATCH_ENABLED:-true}
+      - WATCH_AUTO_ORGANIZE=${WATCH_AUTO_ORGANIZE:-true}
+      - STABLE_SECONDS=${STABLE_SECONDS:-10}
+      # DLsite
+      - DLSITE_ENABLED=${DLSITE_ENABLED:-true}
+      - DLSITE_PROXY=${DLSITE_PROXY:-}
+      # Plex
+      - PLEX_URL=${PLEX_URL:-}
+      - PLEX_TOKEN=${PLEX_TOKEN:-}
+      - PLEX_AUTO_REFRESH=${PLEX_AUTO_REFRESH:-true}
+      # AI
+      - AI_ENABLED=${AI_ENABLED:-false}
+      - AI_API_URL=${AI_API_URL:-}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     restart: unless-stopped
 
   frontend:

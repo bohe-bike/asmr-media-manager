@@ -57,13 +57,13 @@ case $choice in
     echo ""
     echo "启动 Docker 模式..."
     cd "$SCRIPT_DIR"
-    docker-compose up -d
+    docker compose up -d
     echo ""
     echo "=========================================="
     echo "  Docker 模式已启动"
     echo "  访问地址: http://localhost:3000"
-    echo "  查看日志: docker-compose logs -f"
-    echo "  停止服务: docker-compose down"
+    echo "  查看日志: docker compose logs -f"
+    echo "  停止服务: docker compose down"
     echo "=========================================="
     ;;
 
@@ -94,6 +94,10 @@ case $choice in
     source venv/bin/activate
     pip install -r requirements.txt
     echo "后端依赖安装完成"
+
+    echo ""
+    echo "初始化数据库..."
+    python migrate.py
 
     echo ""
     echo "[2/2] 安装前端依赖..."
