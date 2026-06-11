@@ -33,6 +33,10 @@
           <el-form-item label="启用监听">
             <el-switch v-model="settings.watch_enabled" active-text="是" inactive-text="否" />
           </el-form-item>
+          <el-form-item label="自动整理">
+            <el-switch v-model="settings.watch_auto_organize" active-text="开启" inactive-text="关闭" />
+            <span class="form-tip">关闭后只扫描入库，不自动移动文件到整理目录</span>
+          </el-form-item>
           <el-form-item label="稳定秒数">
             <el-input-number v-model="settings.stable_seconds" :min="1" :max="60" />
             <span class="form-tip">文件大小稳定多少秒后判定下载完成</span>
@@ -110,6 +114,11 @@
             <el-switch v-model="settings.plex_auto_refresh" active-text="开启" inactive-text="关闭" />
             <span class="form-tip">整理文件后自动通知 Plex 刷新媒体库</span>
           </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="testPlex" :loading="testingPlex" :disabled="!settings.plex_url || !settings.plex_token">
+              测试 Plex 连接
+            </el-button>
+          </el-form-item>
         </div>
 
         <div class="settings-section">
@@ -133,12 +142,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import { settingsApi } from '@/api'
 import { ElMessage } from 'element-plus'
 import { Check, FolderOpened, Search, Edit, MagicStick, Document, Link, Monitor, Delete } from '@element-plus/icons-vue'
 
 const settingsStore = useSettingsStore()
 const loading = ref(false)
 const saving = ref(false)
+const testingPlex = ref(false)
 const settings = ref<any>(null)
 
 onMounted(async () => {
@@ -158,6 +169,18 @@ async function handleSave() {
     ElMessage.success('设置已保存')
   } finally {
     saving.value = false
+  }
+}
+
+async function testPlex() {
+  testingPlex.value = true
+  try {
+    await settingsApi.testPlex()
+    ElMessage.success('Plex 连接成功')
+  } catch {
+    ElMessage.error('Plex 连接失败，请检查地址和 Token')
+  } finally {
+    testingPlex.value = false
   }
 }
 </script>

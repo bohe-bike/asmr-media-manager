@@ -7,7 +7,8 @@
       </div>
       <div class="header-actions" v-if="selectedIds.length > 0">
         <el-tag type="primary" size="large" effect="dark">已选 {{ selectedIds.length }} 项</el-tag>
-        <el-button type="warning" @click="batchRename" :icon="Edit">批量重命名</el-button>
+        <el-button type="primary" @click="batchOrganize" :icon="FolderOpened">批量整理</el-button>
+        <el-button type="warning" @click="batchFetchDlsite" :icon="Link">DLsite 补全</el-button>
         <el-button type="success" @click="batchWriteTags" :icon="PriceTag">写入标签</el-button>
         <el-button @click="clearSelection">取消选择</el-button>
       </div>
@@ -38,6 +39,11 @@
           <el-option label="已重命名" value="renamed" />
           <el-option label="错误" value="error" />
         </el-select>
+        <el-button-group size="large">
+          <el-button :type="showUnclassified ? 'danger' : 'default'" @click="toggleUnclassified">
+            <el-icon><Warning /></el-icon> 未分类
+          </el-button>
+        </el-button-group>
       </div>
     </el-card>
 
@@ -112,24 +118,30 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Search, Headset, VideoCamera, View, Edit, PriceTag } from '@element-plus/icons-vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Search, Headset, VideoCamera, View, PriceTag, FolderOpened, Link, Warning } from '@element-plus/icons-vue'
 import { useMediaStore } from '@/stores/media'
-import { renameApi, metadataApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { mediaApi, metadataApi } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const mediaStore = useMediaStore()
 
 const search = ref('')
 const mediaType = ref('')
 const status = ref('')
+const showUnclassified = ref(false)
 const currentPage = ref(1)
 const selectedIds = ref<number[]>([])
 const tableRef = ref<any>(null)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(() => {
+  // 从 Dashboard 跳转过来时自动应用未分类筛选
+  if (route.query.unclassified === '1') {
+    showUnclassified.value = true
+  }
   loadMedia()
 })
 
@@ -138,8 +150,15 @@ function loadMedia() {
   if (search.value) params.search = search.value
   if (mediaType.value) params.media_type = mediaType.value
   if (status.value) params.status = status.value
+  if (showUnclassified.value) params.unclassified = true
   mediaStore.setPage(currentPage.value)
   mediaStore.fetchMedia(params)
+}
+
+function toggleUnclassified() {
+  showUnclassified.value = !showUnclassified.value
+  currentPage.value = 1
+  loadMedia()
 }
 
 function debounceSearch() {
@@ -168,7 +187,7 @@ function goDetail(id: number) {
   router.push(`/media/${id}`)
 }
 
-async function batchRename() {
+function batchRename() {
   if (selectedIds.value.length === 0) return
   router.push({ path: '/rename', query: { ids: selectedIds.value.join(',') } })
 }
@@ -178,6 +197,31 @@ async function batchWriteTags() {
   try {
     await metadataApi.writeTags({ media_ids: selectedIds.value, fields: ['artist', 'album', 'genre', 'comment'] })
     ElMessage.success(`已对 ${selectedIds.value.length} 个文件写入标签`)
+  } catch {}
+}
+
+async function batchOrganize() {
+  if (selectedIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 ${selectedIds.value.length} 个文件整理到 library 目录吗？`,
+      '批量整理',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+    const res: any = await mediaApi.organizeExecute({ media_ids: selectedIds.value })
+    ElMessage.success(`整理完成：成功 ${res.data.success}，失败 ${res.data.failed}`)
+    clearSelection()
+    loadMedia()
+  } catch {}
+}
+
+async function batchFetchDlsite() {
+  if (selectedIds.value.length === 0) return
+  try {
+    const res: any = await metadataApi.fetchDlsite({ media_ids: selectedIds.value })
+    ElMessage.success(`DLsite 补全完成：更新 ${res.data.updated}，跳过 ${res.data.skipped}，失败 ${res.data.failed}`)
+    clearSelection()
+    loadMedia()
   } catch {}
 }
 

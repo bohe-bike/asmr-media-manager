@@ -7,6 +7,7 @@ interface Settings {
   library_dir: string
   watch_dirs: string[]
   watch_enabled: boolean
+  watch_auto_organize: boolean
   stable_seconds: number
   audio_rename_pattern: string
   video_rename_pattern: string

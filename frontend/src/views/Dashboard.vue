@@ -54,13 +54,13 @@
         </div>
       </el-col>
       <el-col :span="4">
-        <div class="stat-card stat-unclassified">
+        <div class="stat-card stat-unclassified clickable" @click="router.push('/media?unclassified=1')">
           <div class="stat-icon">
             <el-icon :size="32"><Warning /></el-icon>
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.unclassified }}</div>
-            <div class="stat-label">未分类</div>
+            <div class="stat-label">未分类 ↗</div>
           </div>
         </div>
       </el-col>
@@ -156,10 +156,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Refresh, FolderOpened, Search, Clock, Files, Headset, VideoCamera, CircleCheck, Warning } from '@element-plus/icons-vue'
 import { mediaApi, scanApi } from '@/api'
 import { useScanStore } from '@/stores/scan'
 import type { ScanJob } from '@/types'
+
+const router = useRouter()
 
 const scanStore = useScanStore()
 const scanPath = ref('')
@@ -256,6 +259,14 @@ function formatTime(t: string) {
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+}
+
+.stat-card.clickable:hover {
+  border: 2px solid #fda085;
 }
 
 .stat-icon {

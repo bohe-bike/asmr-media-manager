@@ -12,6 +12,7 @@ class SettingsResponse(BaseModel):
     library_dir: str
     watch_dirs: list[str]
     watch_enabled: bool
+    watch_auto_organize: bool
     stable_seconds: int
     audio_rename_pattern: str
     video_rename_pattern: str
@@ -40,6 +41,7 @@ class SettingsUpdate(BaseModel):
     library_dir: str | None = None
     watch_dirs: list[str] | None = None
     watch_enabled: bool | None = None
+    watch_auto_organize: bool | None = None
     stable_seconds: int | None = None
     audio_rename_pattern: str | None = None
     video_rename_pattern: str | None = None
@@ -65,6 +67,7 @@ def _build_response(settings) -> SettingsResponse:
         library_dir=settings.library_dir,
         watch_dirs=settings.watch_dirs,
         watch_enabled=settings.watch_enabled,
+        watch_auto_organize=settings.watch_auto_organize,
         stable_seconds=settings.stable_seconds,
         audio_rename_pattern=settings.audio_rename_pattern,
         video_rename_pattern=settings.video_rename_pattern,
@@ -107,3 +110,16 @@ async def update_settings(update: SettingsUpdate):
     save_settings_to_env(updates)
     settings = reload_settings()
     return ApiResponse(message="设置已保存", data=_build_response(settings))
+
+
+@router.post("/settings/test-plex")
+async def test_plex_connection():
+    """测试 Plex 连接"""
+    from app.services.plex_service import PlexService
+
+    plex = PlexService()
+    result = await plex.test_connection()
+    if result.get("connected"):
+        return ApiResponse(message=f"Plex 连接成功: {result['name']} (v{result['version']})", data=result)
+    else:
+        return ApiResponse(code=400, message=f"Plex 连接失败: {result.get('error', '未知错误')}", data=result)

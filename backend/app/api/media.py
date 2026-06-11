@@ -47,6 +47,7 @@ async def list_media(
     cv: str | None = None,
     rj_id: str | None = None,
     tag: str | None = None,
+    unclassified: bool | None = None,
     search: str | None = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
@@ -66,6 +67,8 @@ async def list_media(
         query = query.where(Media.cv.contains(cv))
     if rj_id:
         query = query.where(Media.rj_id.contains(rj_id))
+    if unclassified:
+        query = query.where(Media.creator.is_(None))
     if search:
         query = query.where(
             (Media.title.contains(search))

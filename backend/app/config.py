@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Scan
     scan_recursive: bool = True
     watch_enabled: bool = True
+    watch_auto_organize: bool = True  # 监控到新文件后是否自动整理到 library
     stable_seconds: int = 10
     check_interval: int = 5
 

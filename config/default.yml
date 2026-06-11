@@ -4,11 +4,13 @@
 directories:
   download: /media/downloads
   library: /media/library
+  watch_dirs: []  # 额外监控目录列表，如 ["/media/extra1", "/media/extra2"]
 
 # 扫描设置
 scan:
   recursive: true
   watch_enabled: true
+  watch_auto_organize: true  # 监控到新文件后是否自动整理到 library 目录
   stable_seconds: 10
   check_interval: 5
 
@@ -34,18 +36,9 @@ rename:
   video_pattern: "[{creator}] {title}"
   max_filename_length: 200
 
-# AI 设置
-ai:
-  enabled: false
-  provider: ollama
-  model: qwen2:7b
-  ollama_url: http://localhost:11434
-  ocr_enabled: false
-
 # 整理输出设置
 organize:
   unclassified_dir: "未分类"
-  copy_covers: true
 
 # 封面设置
 cover:
@@ -54,6 +47,29 @@ cover:
     - folder.jpg
     - front.jpg
   max_size: 1000
+
+# DLsite 设置
+dlsite:
+  enabled: true
+  api_base: "https://www.dlsite.com/maniax/api"
+  cache_ttl: 1800       # 缓存 TTL（秒）
+  rate_limit: 1.0       # 每秒最大请求数
+  timeout: 10.0         # 请求超时（秒）
+  proxy: ""             # HTTP 代理地址，如 http://127.0.0.1:7890
+
+# Plex 设置
+plex:
+  url: ""               # Plex Server 地址，如 http://192.168.1.100:32400
+  token: ""             # Plex X-Plex-Token
+  auto_refresh: true    # 整理后自动刷新 Plex 媒体库
+
+# AI 设置
+ai:
+  enabled: false
+  api_url: ""
+  api_key: ""
+  model: ""
+  ocr_enabled: false
 
 # 数据库设置
 database:

@@ -113,4 +113,5 @@ export const metadataApi = {
 export const settingsApi = {
   get: () => client.get('/settings'),
   update: (data: Record<string, unknown>) => client.patch('/settings', data),
+  testPlex: () => client.post('/settings/test-plex'),
 }

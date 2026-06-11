@@ -38,8 +38,14 @@ async def lifespan(app: FastAPI):
             async with async_session() as db:
                 scanner = ScannerService(db)
                 try:
-                    await scanner.process_and_organize(path)
-                    logger.info(f"Auto-processed: {path}")
+                    if settings.watch_auto_organize:
+                        await scanner.process_and_organize(path)
+                        logger.info(f"Auto-processed and organized: {path}")
+                    else:
+                        media = await scanner._process_file(path)
+                        if media:
+                            await scanner._post_process(media)
+                        logger.info(f"Auto-scanned (no organize): {path}")
                 except Exception as e:
                     logger.error(f"Auto-process failed for {path}: {e}")
 

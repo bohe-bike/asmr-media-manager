@@ -218,12 +218,18 @@ class ScannerService:
         )
         return result.scalar_one_or_none()
 
+    async def _find_by_hash(self, file_hash: str) -> Media | None:
+        result = await self.db.execute(
+            select(Media).where(Media.file_hash == file_hash)
+        )
+        return result.scalar_one_or_none()
+
     async def _process_file(self, file_path: str, commit: bool = True) -> Media | None:
         """处理单个文件：哈希 → 元数据 → 正则解析 → DLsite 反查 → 作者匹配 → 保存
 
         优先级：手动作者规则 > DLsite API > 文件名正则解析 > 文件内置元数据
         """
-        # Check if already exists
+        # Check if already exists by path
         existing = await self._find_existing(file_path)
         if existing:
             return None
@@ -231,6 +237,12 @@ class ScannerService:
         # Compute hash
         file_hash = compute_file_hash(file_path)
         file_size = os.path.getsize(file_path)
+
+        # Check if same file already exists by hash (duplicate detection)
+        hash_existing = await self._find_by_hash(file_hash)
+        if hash_existing:
+            logger.info(f"Duplicate file skipped (hash match): {file_path} == {hash_existing.file_path}")
+            return None
         media_type = get_media_type(file_path)
         if not media_type:
             return None
@@ -377,5 +389,9 @@ class ScannerService:
             media.nfo_path = _write_nfo(media)
         except Exception as e:
             logger.warning(f"Failed to generate NFO for {media.file_path}: {e}")
+
+        # ④ 标记 Plex 就绪（有标题+有作者/声优+后处理完成）
+        if media.title and (media.creator or media.cv):
+            media.plex_ready = True
 
         await self.db.commit()
