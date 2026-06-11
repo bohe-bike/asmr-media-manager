@@ -94,6 +94,14 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.metadata_source" :type="sourceType(row.metadata_source)" size="small" effect="plain">
+              {{ sourceLabel(row.metadata_source) }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="goDetail(row.id)">
@@ -239,6 +247,16 @@ function statusType(s: string) {
 
 function statusLabel(s: string) {
   const map: Record<string, string> = { pending: '待处理', processed: '已处理', renamed: '已重命名', error: '错误' }
+  return map[s] || s
+}
+
+function sourceType(s: string) {
+  const map: Record<string, string> = { manual: 'danger', dlsite: 'warning', parsed: 'info', metadata: 'success' }
+  return map[s] || 'info'
+}
+
+function sourceLabel(s: string) {
+  const map: Record<string, string> = { manual: '手动', dlsite: 'DLsite', parsed: '解析', metadata: '元数据' }
   return map[s] || s
 }
 </script>

@@ -54,6 +54,11 @@
               <el-descriptions-item v-if="media.metadata_source" label="数据来源">
                 <el-tag :type="sourceType(media.metadata_source)" effect="light">{{ sourceLabel(media.metadata_source) }}</el-tag>
               </el-descriptions-item>
+              <el-descriptions-item label="Plex 就绪">
+                <el-tag :type="media.plex_ready ? 'success' : 'info'" effect="light">
+                  {{ media.plex_ready ? '是' : '否' }}
+                </el-tag>
+              </el-descriptions-item>
             </el-descriptions>
           </el-card>
         </el-col>
@@ -70,6 +75,9 @@
               </el-button>
               <el-button type="warning" size="small" @click="fetchDlsite" :loading="fetchingDlsite" :disabled="!settingsStore.settings?.dlsite_enabled">
                 <el-icon><Link /></el-icon> DLsite 补全
+              </el-button>
+              <el-button type="info" size="small" @click="writeSingleTag" :loading="writingTag">
+                <el-icon><PriceTag /></el-icon> 写入标签
               </el-button>
               <el-button type="primary" size="small" @click="saveMetadata" :loading="saving">
                 <el-icon><Check /></el-icon> 保存
@@ -192,6 +200,7 @@ const loading = ref(false)
 const saving = ref(false)
 const analyzing = ref(false)
 const fetchingDlsite = ref(false)
+const writingTag = ref(false)
 const coverError = ref(false)
 const showTagInput = ref(false)
 const newTagName = ref('')
@@ -296,6 +305,19 @@ async function addTag() {
     showTagInput.value = false
     ElMessage.success('标签已添加')
   } catch {}
+}
+
+async function writeSingleTag() {
+  if (!media.value) return
+  writingTag.value = true
+  try {
+    await metadataApi.writeTags({ media_ids: [media.value.id], fields: ['artist', 'album', 'genre', 'comment'] })
+    ElMessage.success('标签已写入音频文件')
+  } catch {
+    ElMessage.error('标签写入失败')
+  } finally {
+    writingTag.value = false
+  }
 }
 
 async function removeTag(tagId: number) {

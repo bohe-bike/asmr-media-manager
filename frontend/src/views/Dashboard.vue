@@ -90,6 +90,9 @@
                 <el-radio-button value="incremental">增量扫描</el-radio-button>
               </el-radio-group>
             </el-form-item>
+            <el-form-item>
+              <el-checkbox v-model="autoOrganize" size="large">扫描后自动整理</el-checkbox>
+            </el-form-item>
             <el-button
               type="primary"
               size="large"
@@ -111,6 +114,9 @@
               <el-descriptions-item label="总文件">{{ scanResult.total_files }}</el-descriptions-item>
               <el-descriptions-item label="新文件">
                 <el-tag type="success" size="small">{{ scanResult.new_files }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="已整理">
+                <el-tag type="warning" size="small">{{ scanResult.organized_files || 0 }}</el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="错误">
                 <el-tag :type="scanResult.error_files > 0 ? 'danger' : 'info'" size="small">
@@ -167,6 +173,7 @@ const router = useRouter()
 const scanStore = useScanStore()
 const scanPath = ref('')
 const scanType = ref('full')
+const autoOrganize = ref(false)
 const scanning = ref(false)
 const scanResult = ref<ScanJob | null>(null)
 const recentJobs = ref<ScanJob[]>([])
@@ -203,7 +210,7 @@ async function handleScan() {
   if (!scanPath.value) return
   scanning.value = true
   try {
-    const result = await scanStore.startScan(scanPath.value, scanType.value)
+    const result = await scanStore.startScan(scanPath.value, scanType.value, autoOrganize.value)
     scanResult.value = result
     refresh()
   } finally {
