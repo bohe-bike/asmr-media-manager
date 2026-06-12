@@ -1,6 +1,9 @@
+import logging
 import os
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +15,8 @@ from app.schemas.media import MediaResponse, MediaListItem, MediaListResponse, M
 from app.schemas.common import ApiResponse
 from app.core.exceptions import NotFoundException, ValidationException
 from app.services.cover_service import CoverService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

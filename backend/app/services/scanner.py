@@ -17,6 +17,7 @@ from app.services.organize_service import OrganizeService
 from app.services.dlsite_service import DlsiteService
 from app.services.cover_service import CoverService
 from app.services.plex_service import PlexService
+from app.api.ws import broadcast_scan_progress
 from app.utils.hash import compute_file_hash
 from app.utils.file_utils import get_media_type, get_format, is_supported_format
 from app.config import get_settings
@@ -175,11 +176,36 @@ class ScannerService:
 
                 await self.db.commit()
 
+                # 广播进度到 WebSocket
+                await broadcast_scan_progress(job_id, {
+                    "type": "progress",
+                    "data": {
+                        "processed_files": job.processed_files,
+                        "total_files": job.total_files,
+                        "new_files": job.new_files,
+                        "error_files": job.error_files,
+                        "organized_files": job.organized_files,
+                        "progress_percent": 100.0 if job.total_files == 0 else (job.processed_files / job.total_files * 100),
+                    },
+                })
+
             job.status = "completed"
             job.finished_at = datetime.utcnow()
             if errors:
                 job.errors = json.dumps(errors, ensure_ascii=False)
             await self.db.commit()
+
+            # 广播完成状态
+            await broadcast_scan_progress(job_id, {
+                "type": "completed",
+                "data": {
+                    "status": "completed",
+                    "total_files": job.total_files,
+                    "new_files": job.new_files,
+                    "error_files": job.error_files,
+                    "organized_files": job.organized_files,
+                },
+            })
 
             # 整理完成后通知 Plex 刷新媒体库
             if organize and self.settings.plex_auto_refresh and job.organized_files > 0:
@@ -195,6 +221,19 @@ class ScannerService:
             job.finished_at = datetime.utcnow()
             job.errors = json.dumps([{"error": str(e)}], ensure_ascii=False)
             await self.db.commit()
+
+            # 广播失败状态
+            await broadcast_scan_progress(job_id, {
+                "type": "completed",
+                "data": {
+                    "status": "failed",
+                    "total_files": job.total_files,
+                    "processed_files": job.processed_files,
+                    "new_files": job.new_files,
+                    "error_files": job.error_files,
+                    "error": str(e),
+                },
+            })
 
     def _collect_files(self, path: str, recursive: bool = True) -> list[str]:
         """收集目录中的媒体文件"""
