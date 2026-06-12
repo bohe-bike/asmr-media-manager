@@ -227,7 +227,7 @@ class ScannerService:
     async def _process_file(self, file_path: str, commit: bool = True) -> Media | None:
         """处理单个文件：哈希 → 元数据 → 正则解析 → DLsite 反查 → 作者匹配 → 保存
 
-        优先级：手动作者规则 > DLsite API > 文件名正则解析 > 文件内置元数据
+        优先级：手动作者规则 > 文件名正则解析 > 文件内置元数据 > DLsite API（补充）
         """
         # Check if already exists by path
         existing = await self._find_existing(file_path)
@@ -247,13 +247,13 @@ class ScannerService:
         if not media_type:
             return None
 
-        # ① 读取文件内置元数据（最低优先级 fallback）
+        # ① 读取文件内置元数据
         metadata = await self.metadata_service.read_metadata(file_path)
 
         # ② 文件名正则解析（向上查找目录名中的 RJ号）
         parsed = await self.rule_engine.parse_with_ancestors(file_path, max_depth=2)
 
-        # ③ DLsite API 反查（如果有 RJ/DL 号）
+        # ③ DLsite API 反查（如果有 RJ/DL 号，仅用于补充本地无法获取的字段）
         dlsite_data = None
         work_id = parsed.get("rj_id") or parsed.get("dl_id")
         if work_id and self.dlsite_service.enabled:
@@ -262,16 +262,25 @@ class ScannerService:
             except Exception as e:
                 logger.warning(f"DLsite API 查询失败 {work_id}: {e}")
 
-        # 合并元数据，优先级：dlsite > parsed > metadata
-        title = (dlsite_data or {}).get("title") or parsed.get("title") or metadata.get("title")
-        creator = (dlsite_data or {}).get("creator") or metadata.get("artist")
+        # 合并元数据，优先级：文件名解析 > 文件内置元数据 > DLsite API（补充）
+        title = parsed.get("title") or metadata.get("title") or (dlsite_data or {}).get("title")
+        creator = metadata.get("artist") or (dlsite_data or {}).get("creator")
         circle = (dlsite_data or {}).get("circle")
         cv = parsed.get("cv") or (dlsite_data or {}).get("cv")
         language = parsed.get("language") or (dlsite_data or {}).get("language")
         platform = parsed.get("platform")
-        description = (dlsite_data or {}).get("description")
+        description = metadata.get("description") or (dlsite_data or {}).get("description")
         cover_url = (dlsite_data or {}).get("cover_url")
-        metadata_source = "dlsite" if dlsite_data else "parsed"
+
+        # 判断主要元数据来源
+        if parsed.get("title") or parsed.get("cv") or parsed.get("rj_id"):
+            metadata_source = "parsed"
+        elif metadata.get("artist") or metadata.get("title"):
+            metadata_source = "metadata"
+        elif dlsite_data:
+            metadata_source = "dlsite"
+        else:
+            metadata_source = "none"
 
         media = Media(
             file_path=file_path,
