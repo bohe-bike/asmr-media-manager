@@ -21,40 +21,53 @@ logger = logging.getLogger(__name__)
 _watcher = None
 
 
+async def _on_file_ready(path: str) -> None:
+    from app.database import async_session
+    from app.services.scanner import ScannerService
+
+    async with async_session() as db:
+        scanner = ScannerService(db)
+        try:
+            if get_settings().watch_auto_organize:
+                await scanner.process_and_organize(path)
+                logger.info(f"Auto-processed and organized: {path}")
+            else:
+                media = await scanner._process_file(path)
+                if media:
+                    await scanner._post_process(media)
+                logger.info(f"Auto-scanned (no organize): {path}")
+        except Exception as e:
+            logger.error(f"Auto-process failed for {path}: {e}")
+
+
+async def restart_watcher() -> None:
+    """Apply watcher-related setting changes without restarting the API process."""
+    global _watcher
+
+    if _watcher:
+        await _watcher.stop()
+        _watcher = None
+
+    if not get_settings().watch_enabled:
+        return
+
+    from app.services.watcher import DownloadWatcher
+
+    _watcher = DownloadWatcher(on_file_ready=_on_file_ready)
+    try:
+        await _watcher.start()
+        logger.info("File watcher started")
+    except Exception as e:
+        logger.warning(f"Failed to start file watcher: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _watcher
     logger.info("Starting ASMR Media Manager...")
     await init_db()
     logger.info("Database initialized")
 
-    # Start file watcher if enabled
-    if settings.watch_enabled:
-        from app.services.watcher import DownloadWatcher
-        from app.services.scanner import ScannerService
-        from app.database import async_session
-
-        async def on_file_ready(path: str):
-            async with async_session() as db:
-                scanner = ScannerService(db)
-                try:
-                    if settings.watch_auto_organize:
-                        await scanner.process_and_organize(path)
-                        logger.info(f"Auto-processed and organized: {path}")
-                    else:
-                        media = await scanner._process_file(path)
-                        if media:
-                            await scanner._post_process(media)
-                        logger.info(f"Auto-scanned (no organize): {path}")
-                except Exception as e:
-                    logger.error(f"Auto-process failed for {path}: {e}")
-
-        _watcher = DownloadWatcher(on_file_ready=on_file_ready)
-        try:
-            await _watcher.start()
-            logger.info("File watcher started")
-        except Exception as e:
-            logger.warning(f"Failed to start file watcher: {e}")
+    await restart_watcher()
 
     yield
 

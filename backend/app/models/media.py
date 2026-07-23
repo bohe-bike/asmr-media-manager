@@ -38,6 +38,8 @@ class Media(Base):
     status = Column(String(20), nullable=False, default="pending", index=True)
     plex_ready = Column(Boolean, nullable=False, default=False)
     error_message = Column(Text)
+    rename_original_path = Column(Text)
+    rename_original_status = Column(String(20))
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     scanned_at = Column(DateTime)

@@ -22,11 +22,15 @@ class AuthorMatcher:
 
     async def match(self, media: Media) -> dict | None:
         """对单个媒体执行作者匹配，返回匹配结果或 None"""
-        texts = self._collect_match_texts(media)
         rules = await self._get_enabled_rules()
+        return await self._match_with_rules(media, rules)
+
+    async def _match_with_rules(self, media: Media, rules: list[AuthorRule]) -> dict | None:
+        """使用指定规则集匹配单个媒体。"""
+        texts = self._collect_match_texts(media)
 
         for rule in rules:
-            for target, text in texts.items():
+            for target, text in self.get_target_texts(rule, texts):
                 if not text:
                     continue
                 if self._match_rule(rule, text):
@@ -40,6 +44,13 @@ class AuthorMatcher:
                         "rule_id": rule.id,
                     }
         return None
+
+    @staticmethod
+    def get_target_texts(rule: AuthorRule, texts: dict[str, str]) -> list[tuple[str, str]]:
+        """返回规则配置允许参与匹配的文本。"""
+        if rule.match_target == "all":
+            return list(texts.items())
+        return [(rule.match_target, texts.get(rule.match_target, ""))]
 
     def _collect_match_texts(self, media: Media) -> dict:
         """收集所有可用于匹配的文本"""
@@ -77,8 +88,18 @@ class AuthorMatcher:
         rule.last_hit_at = datetime.utcnow()
         await self.db.commit()
 
-    async def _get_enabled_rules(self) -> list[AuthorRule]:
+    async def _get_enabled_rules(self, rule_ids: list[int] | None = None) -> list[AuthorRule]:
         """获取已启用的规则，按优先级降序排列（带缓存）"""
+        if rule_ids is not None:
+            if not rule_ids:
+                return []
+            result = await self.db.execute(
+                select(AuthorRule)
+                .where(AuthorRule.enabled == True, AuthorRule.id.in_(rule_ids))
+                .order_by(AuthorRule.priority.desc())
+            )
+            return list(result.scalars().all())
+
         now = datetime.utcnow()
         if (
             self._rules_cache is None
@@ -108,10 +129,11 @@ class AuthorMatcher:
 
         result = await self.db.execute(query)
         medias = result.scalars().all()
+        rules = await self._get_enabled_rules(rule_ids)
 
         for media in medias:
             stats["total_checked"] += 1
-            match_result = await self.match(media)
+            match_result = await self._match_with_rules(media, rules)
             if match_result:
                 if media.creator and not overwrite:
                     stats["skipped"] += 1
@@ -120,9 +142,12 @@ class AuthorMatcher:
                     stats["overwritten"] += 1
                 else:
                     stats["newly_classified"] += 1
-                media.creator = match_result["creator"]
-                media.circle = match_result["circle"]
-                media.cv = match_result["cv"]
+                if match_result["creator"]:
+                    media.creator = match_result["creator"]
+                if match_result["circle"]:
+                    media.circle = match_result["circle"]
+                if match_result["cv"]:
+                    media.cv = match_result["cv"]
 
         await self.db.commit()
         return stats

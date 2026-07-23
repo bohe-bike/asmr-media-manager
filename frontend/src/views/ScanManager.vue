@@ -177,11 +177,13 @@ function connectWs(jobId: number) {
       currentJob.value.total_files = msg.data.total_files
       currentJob.value.new_files = msg.data.new_files
       currentJob.value.error_files = msg.data.error_files
+      currentJob.value.organized_files = msg.data.organized_files || 0
       currentJob.value.progress_percent = msg.data.progress_percent
     } else if (msg.type === 'completed' && currentJob.value) {
       currentJob.value.status = msg.data.status
       currentJob.value.new_files = msg.data.new_files
       currentJob.value.error_files = msg.data.error_files
+      currentJob.value.organized_files = msg.data.organized_files || 0
       currentJob.value.progress_percent = 100
       disconnectWs()
       refreshJobs()

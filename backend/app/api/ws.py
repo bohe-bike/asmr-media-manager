@@ -57,6 +57,7 @@ async def scan_progress_ws(websocket: WebSocket, job_id: int):
                             "total_files": job.total_files,
                             "new_files": job.new_files,
                             "error_files": job.error_files,
+                            "organized_files": job.organized_files,
                             "progress_percent": 100.0 if job.total_files == 0 else (job.processed_files / job.total_files * 100),
                         },
                     }
@@ -71,6 +72,7 @@ async def scan_progress_ws(websocket: WebSocket, job_id: int):
                             "total_files": job.total_files,
                             "new_files": job.new_files,
                             "error_files": job.error_files,
+                            "organized_files": job.organized_files,
                         },
                     })
                     break

@@ -84,6 +84,8 @@ class RenameService:
                         shutil.move(media.cover_path, new_cover)
                         media.cover_path = new_cover
 
+                media.rename_original_path = old_path
+                media.rename_original_status = media.status
                 media.file_path = new_path
                 media.file_name = os.path.basename(new_path)
                 media.status = "renamed"

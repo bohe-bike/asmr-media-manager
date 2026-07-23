@@ -104,6 +104,9 @@ npm run dev
 
 ### 环境变量（.env）
 
+`.env` 用于初始化部署配置。通过设置页面修改的值会保存到数据目录中的
+`runtime_settings.json`，并覆盖环境变量；该文件随 Docker 的 `data` 挂载持久化，应与数据库一同备份。
+
 ```env
 # 目录
 DOWNLOAD_DIR=/media/downloads     # 下载目录（扫描来源）
@@ -437,7 +440,7 @@ http://localhost:8080/docs
 
 ## 数据库迁移
 
-升级后如果新增了数据库字段，运行迁移脚本：
+启动时会自动为 SQLite 数据库添加应用所需的缺失列。若需要手动执行升级，也可以运行迁移脚本：
 
 ```bash
 cd backend

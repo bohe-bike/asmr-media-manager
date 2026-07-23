@@ -60,7 +60,7 @@ async def rollback_rename(
     request: RollbackRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """回滚重命名操作：将文件移回原路径"""
+    """回滚最近一次重命名操作：将文件移回原路径。"""
     import os
     import shutil
 
@@ -74,18 +74,17 @@ async def rollback_rename(
 
     for media in medias:
         try:
-            # Parse original path from file_name or error_message
-            # Rollback moves the file back to the download directory
             current_path = media.file_path
             if not os.path.exists(current_path):
                 failed += 1
                 continue
 
-            # Move back to download directory
-            from app.config import get_settings
-            settings = get_settings()
-            original_path = os.path.join(settings.download_dir, media.file_name)
+            original_path = media.rename_original_path
+            if not original_path:
+                failed += 1
+                continue
 
+            os.makedirs(os.path.dirname(original_path), exist_ok=True)
             if os.path.exists(original_path):
                 # Add suffix to avoid conflict
                 base, ext = os.path.splitext(original_path)
@@ -96,7 +95,10 @@ async def rollback_rename(
 
             shutil.move(current_path, original_path)
             media.file_path = original_path
-            media.status = "pending"
+            media.file_name = os.path.basename(original_path)
+            media.status = media.rename_original_status or "processed"
+            media.rename_original_path = None
+            media.rename_original_status = None
             success += 1
         except Exception as e:
             failed += 1

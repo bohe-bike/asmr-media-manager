@@ -128,7 +128,7 @@ async def scan_test_rule(
     samples = []
     for media in medias:
         texts = matcher._collect_match_texts(media)
-        for target, text in texts.items():
+        for target, text in matcher.get_target_texts(rule, texts):
             if text and matcher._match_rule(rule, text):
                 matched += 1
                 if len(samples) < 10:

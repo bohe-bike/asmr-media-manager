@@ -26,7 +26,7 @@ class GenerateRequest(BaseModel):
 
 class WriteTagsRequest(BaseModel):
     media_ids: list[int]
-    fields: list[str] = ["artist", "album", "genre", "comment"]
+    fields: list[str] = ["title", "album", "artist", "album_artist", "genre", "comment"]
 
 
 class AiAnalyzeRequest(BaseModel):
@@ -111,22 +111,30 @@ async def write_tags(
         raise NotFoundException("未找到指定的媒体文件")
 
     service = MetadataService()
+    cover_service = CoverService()
     success = 0
     failed = 0
 
     for media in medias:
         tags = {}
-        if "artist" in request.fields and media.cv:
-            tags["artist"] = media.cv
-        if "album" in request.fields and media.title:
+        if "title" in request.fields and media.title:
             tags["title"] = media.title
+        if "album" in request.fields and media.title:
+            tags["album"] = f"[{media.rj_id}] {media.title}" if media.rj_id else media.title
+        if "artist" in request.fields and (media.creator or media.cv):
+            tags["artist"] = media.creator or media.cv
+        if "album_artist" in request.fields and media.circle:
+            tags["album_artist"] = media.circle
         if "genre" in request.fields:
             tags["genre"] = "ASMR"
         if "comment" in request.fields and media.rj_id:
             tags["comment"] = media.rj_id
 
         if tags:
-            ok = await service.write_audio_tags(media.file_path, tags)
+            cover_path = media.cover_path
+            if not cover_path or not os.path.exists(cover_path):
+                cover_path = await cover_service.find_local_cover(media.file_path)
+            ok = await service.write_audio_tags(media.file_path, tags, cover_path=cover_path)
             if ok:
                 success += 1
             else:

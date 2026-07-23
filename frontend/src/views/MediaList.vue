@@ -203,7 +203,7 @@ function batchRename() {
 async function batchWriteTags() {
   if (selectedIds.value.length === 0) return
   try {
-    await metadataApi.writeTags({ media_ids: selectedIds.value, fields: ['artist', 'album', 'genre', 'comment'] })
+    await metadataApi.writeTags({ media_ids: selectedIds.value })
     ElMessage.success(`已对 ${selectedIds.value.length} 个文件写入标签`)
   } catch {}
 }

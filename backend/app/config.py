@@ -1,4 +1,4 @@
-import os
+import json
 from pathlib import Path
 from functools import lru_cache
 
@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR.parent / ".env"
+RUNTIME_SETTINGS_FILE = BASE_DIR / "data" / "runtime_settings.json"
 
 
 class Settings(BaseSettings):
@@ -94,7 +95,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings(**_load_runtime_settings())
 
 
 def reload_settings() -> Settings:
@@ -103,28 +104,31 @@ def reload_settings() -> Settings:
     return get_settings()
 
 
-def save_settings_to_env(updates: dict) -> None:
-    """将设置变更写入 .env 文件"""
-    # 读取现有 .env 内容
-    existing: dict[str, str] = {}
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, _, value = line.partition("=")
-                existing[key.strip()] = value.strip()
+def _load_runtime_settings() -> dict:
+    """读取由设置页保存的持久化覆盖项。"""
+    if not RUNTIME_SETTINGS_FILE.exists():
+        return {}
 
-    # 更新值
-    for key, value in updates.items():
-        env_key = key.upper()
-        if isinstance(value, bool):
-            existing[env_key] = "true" if value else "false"
-        elif isinstance(value, list):
-            import json
-            existing[env_key] = json.dumps(value)
-        else:
-            existing[env_key] = str(value)
+    try:
+        data = json.loads(RUNTIME_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
 
-    # 写回 .env
-    lines = [f"{k}={v}" for k, v in sorted(existing.items())]
-    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return data if isinstance(data, dict) else {}
+
+
+def save_runtime_settings(updates: dict) -> None:
+    """将设置页的覆盖项保存到数据目录，兼容 Docker 的环境变量配置。"""
+    settings = _load_runtime_settings()
+    settings.update(updates)
+
+    # 使用 Settings 本身验证合并后的内容，避免把无效配置持久化。
+    Settings(**settings)
+
+    RUNTIME_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = RUNTIME_SETTINGS_FILE.with_suffix(".tmp")
+    temp_file.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temp_file.replace(RUNTIME_SETTINGS_FILE)

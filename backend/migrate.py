@@ -19,6 +19,8 @@ COLUMNS_TO_ENSURE = [
     ("media", "cover_url", "TEXT", None),
     ("media", "description", "TEXT", None),
     ("media", "metadata_source", "VARCHAR(20)", None),
+    ("media", "rename_original_path", "TEXT", None),
+    ("media", "rename_original_status", "VARCHAR(20)", None),
     ("scan_jobs", "organized_files", "INTEGER", "0"),
 ]
 

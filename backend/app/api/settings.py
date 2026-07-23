@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.config import get_settings, save_settings_to_env, reload_settings
+from app.config import get_settings, save_runtime_settings, reload_settings
 from app.schemas.common import ApiResponse
 
 router = APIRouter()
@@ -101,14 +101,16 @@ async def get_current_settings():
 
 @router.patch("/settings")
 async def update_settings(update: SettingsUpdate):
-    """更新设置并持久化到 .env 文件"""
+    """更新设置并持久化到数据目录。"""
     updates = update.model_dump(exclude_unset=True)
     if not updates:
         settings = get_settings()
         return ApiResponse(data=_build_response(settings))
 
-    save_settings_to_env(updates)
+    save_runtime_settings(updates)
     settings = reload_settings()
+    from app.main import restart_watcher
+    await restart_watcher()
     return ApiResponse(message="设置已保存", data=_build_response(settings))
 
 

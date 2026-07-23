@@ -290,7 +290,7 @@ class ScannerService:
         metadata = await self.metadata_service.read_metadata(file_path)
 
         # ② 文件名正则解析（向上查找目录名中的 RJ号）
-        parsed = await self.rule_engine.parse_with_ancestors(file_path, max_depth=2)
+        parsed = self.rule_engine.parse_with_ancestors(file_path, max_depth=2)
 
         # ③ DLsite API 反查（如果有 RJ/DL 号，仅用于补充本地无法获取的字段）
         dlsite_data = None
@@ -301,23 +301,23 @@ class ScannerService:
             except Exception as e:
                 logger.warning(f"DLsite API 查询失败 {work_id}: {e}")
 
-        # 合并元数据，优先级：文件名解析 > 文件内置元数据 > DLsite API（补充）
-        title = parsed.get("title") or metadata.get("title") or (dlsite_data or {}).get("title")
-        creator = metadata.get("artist") or (dlsite_data or {}).get("creator")
+        # 合并元数据：DLsite > 文件名解析 > 文件内置元数据；CV 保留文件名优先级。
+        title = (dlsite_data or {}).get("title") or parsed.get("title") or metadata.get("title")
+        creator = (dlsite_data or {}).get("creator") or metadata.get("artist")
         circle = (dlsite_data or {}).get("circle")
         cv = parsed.get("cv") or (dlsite_data or {}).get("cv")
-        language = parsed.get("language") or (dlsite_data or {}).get("language")
+        language = (dlsite_data or {}).get("language") or parsed.get("language")
         platform = parsed.get("platform")
-        description = metadata.get("description") or (dlsite_data or {}).get("description")
+        description = (dlsite_data or {}).get("description") or metadata.get("description")
         cover_url = (dlsite_data or {}).get("cover_url")
 
         # 判断主要元数据来源
-        if parsed.get("title") or parsed.get("cv") or parsed.get("rj_id"):
+        if dlsite_data:
+            metadata_source = "dlsite"
+        elif parsed.get("title") or parsed.get("cv") or parsed.get("rj_id"):
             metadata_source = "parsed"
         elif metadata.get("artist") or metadata.get("title"):
             metadata_source = "metadata"
-        elif dlsite_data:
-            metadata_source = "dlsite"
         else:
             metadata_source = "none"
 
@@ -352,8 +352,10 @@ class ScannerService:
         # ④ 作者匹配（手动规则，命中时覆盖所有已有值）
         match_result = await self.author_matcher.match(media)
         if match_result:
-            media.creator = match_result["creator"]
-            media.circle = match_result["circle"]
+            if match_result["creator"]:
+                media.creator = match_result["creator"]
+            if match_result["circle"]:
+                media.circle = match_result["circle"]
             if match_result["cv"]:
                 media.cv = match_result["cv"]
             media.metadata_source = "manual"
@@ -403,7 +405,9 @@ class ScannerService:
 
         # ① 下载远程封面（如果有 cover_url 且本地没有封面）
         local_cover = await cover_service.find_local_cover(media.file_path)
-        if not local_cover and media.cover_url:
+        if local_cover:
+            media.cover_path = local_cover
+        elif media.cover_url:
             save_dir = os.path.dirname(media.file_path)
             local_cover = await cover_service.download_cover(media.cover_url, save_dir)
             if local_cover:

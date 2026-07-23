@@ -264,6 +264,9 @@ async def get_media_cover(media_id: int, db: AsyncSession = Depends(get_db)):
 
     if not cover_path or not os.path.exists(cover_path):
         cover_path = await cover_service.find_local_cover(media.file_path)
+        if cover_path:
+            media.cover_path = cover_path
+            await db.commit()
 
     if not cover_path or not os.path.exists(cover_path):
         raise NotFoundException("封面不存在")
@@ -392,12 +395,7 @@ async def reorganize_files(
             # 如果文件不在预期位置（可能已经被移动过），跳过
             if not os.path.exists(media.file_path):
                 # 尝试在 library 目录中查找
-                possible_path = os.path.join(
-                    settings.library_dir,
-                    media.creator or "未分类",
-                    organize_service._build_album_dir_name(media),
-                    media.file_name,
-                )
+                possible_path = organize_service.preview(media)["new_path"]
                 if os.path.exists(possible_path):
                     media.file_path = possible_path
                     skipped += 1
