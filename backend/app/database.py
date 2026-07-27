@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -30,9 +33,31 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
+    _ensure_sqlite_database_directory(settings.database_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _ensure_sqlite_columns(conn)
+
+
+def _ensure_sqlite_database_directory(database_url: str) -> Path | None:
+    """Create the parent directory for a file-backed SQLite database."""
+    url = make_url(database_url)
+    if url.get_backend_name() != "sqlite":
+        return None
+
+    database_path = url.database
+    if not database_path or database_path == ":memory:" or database_path.startswith("file:"):
+        return None
+
+    path = Path(database_path).expanduser()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"Unable to create SQLite database directory: {path.parent}. "
+            "Check DATABASE_URL and the directory permissions."
+        ) from exc
+    return path
 
 
 async def _ensure_sqlite_columns(conn) -> None:

@@ -1,5 +1,7 @@
 import json
 
+from sqlalchemy.engine import make_url
+
 from app import config
 
 
@@ -20,3 +22,13 @@ def test_runtime_settings_override_environment_and_persist(tmp_path, monkeypatch
     }
 
     config.get_settings.cache_clear()
+
+
+def test_relative_sqlite_database_url_is_resolved_from_project_root(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///backend/data/asmr_manager.db")
+
+    settings = config.Settings()
+
+    assert make_url(settings.database_url).database == str(
+        config.BASE_DIR.parent / "backend" / "data" / "asmr_manager.db"
+    )

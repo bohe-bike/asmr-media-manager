@@ -3,7 +3,22 @@ import asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.database import _ensure_sqlite_columns
+from app.database import _ensure_sqlite_columns, _ensure_sqlite_database_directory
+
+
+def test_ensure_sqlite_database_directory_creates_missing_parent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    database_path = _ensure_sqlite_database_directory(
+        "sqlite+aiosqlite:///runtime/data/asmr_manager.db"
+    )
+
+    assert database_path == tmp_path / "runtime" / "data" / "asmr_manager.db"
+    assert database_path.parent.is_dir()
+
+
+def test_ensure_sqlite_database_directory_ignores_memory_database():
+    assert _ensure_sqlite_database_directory("sqlite+aiosqlite:///:memory:") is None
 
 
 def test_ensure_sqlite_columns_upgrades_legacy_schema():

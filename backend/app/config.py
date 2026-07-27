@@ -1,9 +1,10 @@
 import json
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path, PureWindowsPath
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+from sqlalchemy.engine import make_url
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -91,6 +92,26 @@ class Settings(BaseSettings):
             if normalized in {"debug", "dev", "development", "true", "1", "yes", "on"}:
                 return True
         return value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def resolve_relative_sqlite_database_url(cls, value):
+        """Resolve SQLite paths in .env relative to the project root."""
+        if not isinstance(value, str):
+            return value
+
+        url = make_url(value)
+        database_path = url.database
+        if (
+            url.get_backend_name() != "sqlite"
+            or not database_path
+            or database_path == ":memory:"
+            or database_path.startswith(("file:", "/", "\\"))
+            or PureWindowsPath(database_path).is_absolute()
+        ):
+            return value
+
+        return str(url.set(database=str(BASE_DIR.parent / database_path)))
 
 
 @lru_cache
